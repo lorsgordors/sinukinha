@@ -22,7 +22,9 @@ const restitution = 0.975;
 const wallRestitution = 0.72; // energia perdida ao bater na tabela
 const get_friction = (speed) => speed > 4 ? frictionSlide : frictionRoll;
 
-let aiming = false, aimX, aimY;
+let aiming = false, aimX = 0, aimY = 0;
+let rawAimX = 0, rawAimY = 0;  // posição real do mouse (alvo do lerp)
+const AIM_LERP = 0.13;          // velocidade de suavização (0=parado, 1=instantâneo)
 let power = 0;
 
 // ===== EFEITO (SPIN) =====
@@ -819,7 +821,7 @@ function drawCue() {
     const dxC = b.x - closestX;
     const dyC = b.y - closestY;
     const distSq = dxC * dxC + dyC * dyC;
-    const r = b.r;
+    const r = b.r + cue.r; // raio combinado: ghost ball toca a bola alvo por fora
     if (distSq <= r * r) {
       const offset = Math.sqrt(r * r - distSq);
       const d = t - offset;
@@ -1087,6 +1089,8 @@ canvas.addEventListener("mousedown", e => {
   }
 
   aiming = true;
+  rawAimX = e.offsetX;
+  rawAimY = e.offsetY;
   aimX = e.offsetX;
   aimY = e.offsetY;
   power = 0;
@@ -1103,8 +1107,8 @@ canvas.addEventListener("mousemove", e => {
     return;
   }
   if (aiming) {
-    aimX = e.offsetX;
-    aimY = e.offsetY;
+    rawAimX = e.offsetX;
+    rawAimY = e.offsetY;
   }
 });
 
@@ -1146,6 +1150,11 @@ canvas.addEventListener("mouseup", e => {
 
 // loop
 function loop() {
+  // suaviza a mira com lerp
+  if (aiming) {
+    aimX += (rawAimX - aimX) * AIM_LERP;
+    aimY += (rawAimY - aimY) * AIM_LERP;
+  }
   drawTable();
   balls.forEach(b => b.update());
   for (let i = 0; i < balls.length; i++) {
