@@ -106,6 +106,9 @@ function playPocketSound() {
 const rX = 60, rY = 60;          // posição interior do feltro
 const rW = W - rX * 2, rH = H - rY * 2; // dimensões do feltro
 const pocketR = 22;  // raio de detecção (pouco maior que a bola r=18)
+const TABLE_CUSHION = 8;
+const TABLE_CORNER_GAP = 32;
+const TABLE_MIDDLE_GAP = 22;
 
 // caçapas — posicionadas no encaixe das quinas/bordas
 const pockets = [
@@ -154,29 +157,104 @@ function drawTable() {
     ctx.stroke();
   }
 
-  // === caçapas (buracos negros recortados no feltro) ===
-  const vr = 16;
-  pockets.forEach(p => {
-    const px = p[0], py = p[1];
-    // buraco
-    let hole = ctx.createRadialGradient(px, py, 0, px, py, vr);
-    hole.addColorStop(0,   "#000");
-    hole.addColorStop(0.85, "#080808");
-    hole.addColorStop(1,    "#1a1008");
+  // === caçapas profissionais ===
+  const pocketRadius = 15;
+  const leatherColor = "#4a2811";
+  const leatherEdge = "#241208";
+
+  function drawPocketCore(px, py, radiusX, radiusY) {
+    const hole = ctx.createRadialGradient(px, py, 0, px, py, Math.max(radiusX, radiusY));
+    hole.addColorStop(0, "#000000");
+    hole.addColorStop(0.55, "#050505");
+    hole.addColorStop(1, "#1a1008");
+
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(px, py, vr, 0, Math.PI * 2);
+    ctx.ellipse(px, py, radiusX, radiusY, 0, 0, Math.PI * 2);
     ctx.fillStyle = hole;
     ctx.fill();
-    // borda escura
-    ctx.strokeStyle = "rgba(0,0,0,0.6)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.lineWidth = 1.8;
     ctx.stroke();
-  });
+    ctx.restore();
+  }
+
+  function drawCornerPocket(px, py, sx, sy) {
+    // garganta preta da caçapa saindo em diagonal da quina
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + sx * 28, py);
+    ctx.lineTo(px, py + sy * 28);
+    ctx.closePath();
+    ctx.fillStyle = "#050505";
+    ctx.fill();
+
+    // jaws de couro nas duas faces da quina
+    ctx.fillStyle = leatherColor;
+    ctx.beginPath();
+    ctx.arc(px + sx * 13, py + sy * 5, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px + sx * 5, py + sy * 13, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = leatherEdge;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(px + sx * 13, py + sy * 5, 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(px + sx * 5, py + sy * 13, 7, 0, Math.PI * 2);
+    ctx.stroke();
+
+    drawPocketCore(px + sx * 8, py + sy * 8, pocketRadius, pocketRadius);
+  }
+
+  function drawSidePocket(px, py, isTop) {
+    const sy = isTop ? -1 : 1;
+
+    // garganta da caçapa lateral com boca mais larga e interior oval
+    ctx.beginPath();
+    ctx.moveTo(px - 26, py);
+    ctx.lineTo(px - 15, py + sy * 10);
+    ctx.lineTo(px + 15, py + sy * 10);
+    ctx.lineTo(px + 26, py);
+    ctx.closePath();
+    ctx.fillStyle = "#050505";
+    ctx.fill();
+
+    // jaws de couro dos dois lados
+    ctx.fillStyle = leatherColor;
+    ctx.beginPath();
+    ctx.arc(px - 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px + 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = leatherEdge;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(px - 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(px + 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.stroke();
+
+    drawPocketCore(px, py + sy * 7, 17, 12);
+  }
+
+  drawCornerPocket(pockets[0][0], pockets[0][1], 1, 1);
+  drawSidePocket(pockets[1][0], pockets[1][1], true);
+  drawCornerPocket(pockets[2][0], pockets[2][1], -1, 1);
+  drawCornerPocket(pockets[3][0], pockets[3][1], 1, -1);
+  drawSidePocket(pockets[4][0], pockets[4][1], false);
+  drawCornerPocket(pockets[5][0], pockets[5][1], -1, -1);
 
   // === borracha dos trilhos (uma faixa verde-escura sólida) ===
-  const bT = 8; // espessura da borracha
-  const ch = 32; // recuo nas quinas
-  const mg = 22; // recuo nas laterais
+  const bT = TABLE_CUSHION;
+  const ch = TABLE_CORNER_GAP;
+  const mg = TABLE_MIDDLE_GAP;
 
   ctx.fillStyle = "#1e5c1a";
 
@@ -213,6 +291,11 @@ function drawTable() {
     ctx.arc(d[0], d[1], bT/2, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  // linha interna da face do trilho para definir melhor o limite jogável
+  ctx.strokeStyle = "rgba(0,0,0,0.22)";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(rX + bT, rY + bT, rW - bT * 2, rH - bT * 2);
 
   // === marcas de referência ===
   ctx.strokeStyle = "rgba(255,255,255,0.12)";
@@ -492,14 +575,17 @@ class Ball {
       });
     };
 
-    let margin = rX + 2;
+    const playLeft = rX + TABLE_CUSHION + this.r;
+    const playRight = W - rX - TABLE_CUSHION - this.r;
+    const playTop = rY + TABLE_CUSHION + this.r;
+    const playBottom = H - rY - TABLE_CUSHION - this.r;
 
     // só quica nas paredes se NÃO estiver perto de uma caçapa
-    if (!nearPocket(this.x, this.y, pocketR + 10)) {
-      if (this.x < margin) { this.x = margin; this.vx = Math.abs(this.vx) * wallRestitution; }
-      if (this.x > W - margin) { this.x = W - margin; this.vx = -Math.abs(this.vx) * wallRestitution; }
-      if (this.y < margin) { this.y = margin; this.vy = Math.abs(this.vy) * wallRestitution; }
-      if (this.y > H - margin) { this.y = H - margin; this.vy = -Math.abs(this.vy) * wallRestitution; }
+    if (!nearPocket(this.x, this.y, pocketR + this.r + 10)) {
+      if (this.x < playLeft) { this.x = playLeft; this.vx = Math.abs(this.vx) * wallRestitution; }
+      if (this.x > playRight) { this.x = playRight; this.vx = -Math.abs(this.vx) * wallRestitution; }
+      if (this.y < playTop) { this.y = playTop; this.vy = Math.abs(this.vy) * wallRestitution; }
+      if (this.y > playBottom) { this.y = playBottom; this.vy = -Math.abs(this.vy) * wallRestitution; }
     }
 
     pockets.forEach(p => {
