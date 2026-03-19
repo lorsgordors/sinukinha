@@ -114,16 +114,104 @@ const pocketR = 22;  // raio de detecção (pouco maior que a bola r=18)
 const TABLE_CUSHION = 8;
 const TABLE_CORNER_GAP = 32;
 const TABLE_MIDDLE_GAP = 22;
+const BALL_RADIUS = 14;
+const CORNER_POCKET_BACKSET = 16;
+const SIDE_POCKET_BACKSET = 8;
 
 // caçapas — posicionadas no encaixe das quinas/bordas
 const pockets = [
-  [rX - 2,  rY - 2],              // canto superior-esquerdo
-  [W / 2,   rY - 6],              // lateral superior
-  [W - rX + 2, rY - 2],           // canto superior-direito
-  [rX - 2,  H - rY + 2],          // canto inferior-esquerdo
-  [W / 2,   H - rY + 6],          // lateral inferior
-  [W - rX + 2, H - rY + 2]        // canto inferior-direito
+  [rX - CORNER_POCKET_BACKSET,      rY - CORNER_POCKET_BACKSET],
+  [W / 2,                           rY - SIDE_POCKET_BACKSET],
+  [W - rX + CORNER_POCKET_BACKSET,  rY - CORNER_POCKET_BACKSET],
+  [rX - CORNER_POCKET_BACKSET,      H - rY + CORNER_POCKET_BACKSET],
+  [W / 2,                           H - rY + SIDE_POCKET_BACKSET],
+  [W - rX + CORNER_POCKET_BACKSET,  H - rY + CORNER_POCKET_BACKSET]
 ];
+
+function getPocketCaptureData(px, py) {
+  const isSidePocket = Math.abs(px - W / 2) < 1;
+
+  if (isSidePocket) {
+    const isTop = py < H / 2;
+    return {
+      mouthX: px,
+      mouthY: py + (isTop ? 22 : -22),
+      sinkX: px,
+      sinkY: py + (isTop ? 8 : -8)
+    };
+  }
+
+  const sx = px < W / 2 ? 1 : -1;
+  const sy = py < H / 2 ? 1 : -1;
+
+  return {
+    mouthX: px + sx * 34,
+    mouthY: py + sy * 34,
+    sinkX: px + sx * 10,
+    sinkY: py + sy * 10
+  };
+}
+
+function getPocketGuideData(px, py) {
+  const isSidePocket = Math.abs(px - W / 2) < 1;
+
+  if (isSidePocket) {
+    const isTop = py < H / 2;
+    const mouthY = py + (isTop ? 22 : -22);
+    const sinkY = py + (isTop ? 8 : -8);
+    return {
+      mouthX: px,
+      mouthY,
+      sinkX: px,
+      sinkY,
+      dirX: 0,
+      dirY: isTop ? -1 : 1,
+      halfWidth: 18,
+      startAlong: -8,
+      endAlong: 26
+    };
+  }
+
+  const sx = px < W / 2 ? 1 : -1;
+  const sy = py < H / 2 ? 1 : -1;
+
+  return {
+    mouthX: px + sx * 34,
+    mouthY: py + sy * 34,
+    sinkX: px + sx * 10,
+    sinkY: py + sy * 10,
+    dirX: -sx / Math.sqrt(2),
+    dirY: -sy / Math.sqrt(2),
+    halfWidth: 16,
+    startAlong: -10,
+    endAlong: 38
+  };
+}
+
+function getPocketMouthState(ballX, ballY, px, py, radius) {
+  const guide = getPocketGuideData(px, py);
+  const perpX = -guide.dirY;
+  const perpY = guide.dirX;
+  const relX = ballX - guide.mouthX;
+  const relY = ballY - guide.mouthY;
+  const along = relX * guide.dirX + relY * guide.dirY;
+  const across = relX * perpX + relY * perpY;
+
+  return {
+    guide,
+    along,
+    across,
+    inside: along > guide.startAlong && along < guide.endAlong && Math.abs(across) < guide.halfWidth + radius * 0.55
+  };
+}
+
+function isInsideRealPocket(ballX, ballY, px, py, radius) {
+  const capture = getPocketCaptureData(px, py);
+  const dx = ballX - capture.sinkX;
+  const dy = ballY - capture.sinkY;
+  const sinkThreshold = Math.max(6, pocketR - radius * 0.45);
+  return Math.sqrt(dx * dx + dy * dy) < sinkThreshold;
+}
 
 function drawTable() {
   // === fundo de madeira (borda externa) ===
@@ -185,11 +273,26 @@ function drawTable() {
   }
 
   function drawCornerPocket(px, py, sx, sy) {
+    const mouthX = px + sx * 34;
+    const mouthY = py + sy * 34;
+
+    // canaleta visual sobre o feltro indo ate a boca da caçapa
+    const lane = ctx.createLinearGradient(mouthX + sx * 12, mouthY + sy * 12, px + sx * 3, py + sy * 3);
+    lane.addColorStop(0, "rgba(0,0,0,0)");
+    lane.addColorStop(1, "rgba(0,0,0,0.40)");
+    ctx.beginPath();
+    ctx.moveTo(mouthX + sx * 16, mouthY - sy * 16);
+    ctx.lineTo(mouthX - sx * 16, mouthY + sy * 16);
+    ctx.lineTo(px + sx * 10, py + sy * 10);
+    ctx.closePath();
+    ctx.fillStyle = lane;
+    ctx.fill();
+
     // garganta preta da caçapa saindo em diagonal da quina
     ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(px + sx * 28, py);
-    ctx.lineTo(px, py + sy * 28);
+    ctx.moveTo(px + sx * 2, py + sy * 2);
+    ctx.lineTo(mouthX + sx * 14, mouthY - sy * 14);
+    ctx.lineTo(mouthX - sx * 14, mouthY + sy * 14);
     ctx.closePath();
     ctx.fillStyle = "#050505";
     ctx.fill();
@@ -197,33 +300,46 @@ function drawTable() {
     // jaws de couro nas duas faces da quina
     ctx.fillStyle = leatherColor;
     ctx.beginPath();
-    ctx.arc(px + sx * 13, py + sy * 5, 7, 0, Math.PI * 2);
+    ctx.arc(mouthX + sx * 11, mouthY - sy * 12, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(px + sx * 5, py + sy * 13, 7, 0, Math.PI * 2);
+    ctx.arc(mouthX - sx * 12, mouthY + sy * 11, 5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = leatherEdge;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(px + sx * 13, py + sy * 5, 7, 0, Math.PI * 2);
+    ctx.arc(mouthX + sx * 11, mouthY - sy * 12, 5, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(px + sx * 5, py + sy * 13, 7, 0, Math.PI * 2);
+    ctx.arc(mouthX - sx * 12, mouthY + sy * 11, 5, 0, Math.PI * 2);
     ctx.stroke();
 
-    drawPocketCore(px + sx * 8, py + sy * 8, pocketRadius, pocketRadius);
+    drawPocketCore(px + sx * 12, py + sy * 12, pocketRadius, pocketRadius);
   }
 
   function drawSidePocket(px, py, isTop) {
     const sy = isTop ? -1 : 1;
 
+    // canaleta visual na boca da caçapa lateral
+    const lane = ctx.createLinearGradient(px, py + sy * 24, px, py + sy * 4);
+    lane.addColorStop(0, "rgba(0,0,0,0)");
+    lane.addColorStop(1, "rgba(0,0,0,0.30)");
+    ctx.beginPath();
+    ctx.moveTo(px - 30, py + sy * 18);
+    ctx.lineTo(px + 30, py + sy * 18);
+    ctx.lineTo(px + 18, py + sy * 6);
+    ctx.lineTo(px - 18, py + sy * 6);
+    ctx.closePath();
+    ctx.fillStyle = lane;
+    ctx.fill();
+
     // garganta da caçapa lateral com boca mais larga e interior oval
     ctx.beginPath();
-    ctx.moveTo(px - 26, py);
-    ctx.lineTo(px - 15, py + sy * 10);
-    ctx.lineTo(px + 15, py + sy * 10);
-    ctx.lineTo(px + 26, py);
+    ctx.moveTo(px - 30, py);
+    ctx.lineTo(px - 18, py + sy * 12);
+    ctx.lineTo(px + 18, py + sy * 12);
+    ctx.lineTo(px + 30, py);
     ctx.closePath();
     ctx.fillStyle = "#050505";
     ctx.fill();
@@ -231,22 +347,22 @@ function drawTable() {
     // jaws de couro dos dois lados
     ctx.fillStyle = leatherColor;
     ctx.beginPath();
-    ctx.arc(px - 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.arc(px - 22, py + sy * 4, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(px + 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.arc(px + 22, py + sy * 4, 6, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = leatherEdge;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(px - 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.arc(px - 22, py + sy * 4, 6, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(px + 18, py + sy * 3, 7, 0, Math.PI * 2);
+    ctx.arc(px + 22, py + sy * 4, 6, 0, Math.PI * 2);
     ctx.stroke();
 
-    drawPocketCore(px, py + sy * 7, 17, 12);
+    drawPocketCore(px, py + sy * 7, 18, 12);
   }
 
   drawCornerPocket(pockets[0][0], pockets[0][1], 1, 1);
@@ -335,7 +451,7 @@ class Ball {
     this.y = y;
     this.vx = 0;
     this.vy = 0;
-    this.r = 18; // raio da bola
+    this.r = BALL_RADIUS;
     this.color = color;
     this.active = true;
     this.falling = false;
@@ -351,6 +467,9 @@ class Ball {
     this.trail = [];
     this.pocketX = 0;
     this.pocketY = 0;
+    this.pocketMouthX = 0;
+    this.pocketMouthY = 0;
+    this.pocketStage = 0;
     this.fallAlpha = 1;
   }
 
@@ -507,11 +626,25 @@ class Ball {
     if (!this.active) return;
 
     if (this.falling) {
-      // puxa a bola para o centro da caçapa enquanto encolhe
-      this.x += (this.pocketX - this.x) * 0.18;
-      this.y += (this.pocketY - this.y) * 0.18;
-      this.fallAlpha *= 0.88;
-      this.r *= 0.90;
+      // estagio 1: passa pela canaleta/boca da caçapa
+      if (this.pocketStage === 0) {
+        this.x += (this.pocketMouthX - this.x) * 0.24;
+        this.y += (this.pocketMouthY - this.y) * 0.24;
+        this.r *= 0.985;
+
+        const dx = this.pocketMouthX - this.x;
+        const dy = this.pocketMouthY - this.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 1.5) {
+          this.pocketStage = 1;
+        }
+      } else {
+        // estagio 2: desce no fundo do buraco
+        this.x += (this.pocketX - this.x) * 0.22;
+        this.y += (this.pocketY - this.y) * 0.22;
+        this.fallAlpha *= 0.86;
+        this.r *= 0.90;
+      }
+
       if (this.r < 1) this.active = false;
       return;
     }
@@ -586,19 +719,23 @@ class Ball {
     const playBottom = H - rY - TABLE_CUSHION - this.r;
 
     // só quica nas paredes se NÃO estiver perto de uma caçapa
-    if (!nearPocket(this.x, this.y, pocketR + this.r + 10)) {
+    if (!nearPocket(this.x, this.y, pocketR + this.r + 22)) {
       if (this.x < playLeft) { this.x = playLeft; this.vx = Math.abs(this.vx) * wallRestitution; }
       if (this.x > playRight) { this.x = playRight; this.vx = -Math.abs(this.vx) * wallRestitution; }
       if (this.y < playTop) { this.y = playTop; this.vy = Math.abs(this.vy) * wallRestitution; }
       if (this.y > playBottom) { this.y = playBottom; this.vy = -Math.abs(this.vy) * wallRestitution; }
     }
 
-    pockets.forEach(p => {
-      let dx = this.x - p[0];
-      let dy = this.y - p[1];
-    if (!this.pocketed && Math.sqrt(dx * dx + dy * dy) < pocketR) {
-        this.pocketX = p[0];
-        this.pocketY = p[1];
+    for (const p of pockets) {
+      const mouthState = getPocketMouthState(this.x, this.y, p[0], p[1], this.r);
+
+      if (!this.pocketed && isInsideRealPocket(this.x, this.y, p[0], p[1], this.r)) {
+        const capture = getPocketCaptureData(p[0], p[1]);
+        this.pocketX = capture.sinkX;
+        this.pocketY = capture.sinkY;
+        this.pocketMouthX = capture.mouthX;
+        this.pocketMouthY = capture.mouthY;
+        this.pocketStage = 0;
         this.falling = true;
         this.vx = 0;
         this.vy = 0;
@@ -607,8 +744,38 @@ class Ball {
           shotPocketedBalls.push(this);
         }
         playPocketSound();
+        break;
       }
-    });
+
+      if (!this.pocketed && mouthState.inside) {
+        const { guide, along, across } = mouthState;
+        const perpX = -guide.dirY;
+        const perpY = guide.dirX;
+        let alongV = this.vx * guide.dirX + this.vy * guide.dirY;
+        let acrossV = this.vx * perpX + this.vy * perpY;
+        const wall = guide.halfWidth - this.r * 0.15;
+
+        if (Math.abs(across) > wall) {
+          const correctedAcross = Math.sign(across) * wall;
+          const correction = correctedAcross - across;
+          this.x += perpX * correction;
+          this.y += perpY * correction;
+          if (acrossV * across > 0) {
+            acrossV *= -0.38;
+          }
+        } else {
+          acrossV *= 0.9;
+        }
+
+        if (along > guide.startAlong + 2) {
+          alongV = Math.max(alongV, 0.15);
+        }
+        alongV *= 0.99;
+
+        this.vx = guide.dirX * alongV + perpX * acrossV;
+        this.vy = guide.dirY * alongV + perpY * acrossV;
+      }
+    }
   }
 }
 
@@ -719,8 +886,8 @@ function setupBalls() {
     [13, 14, 6, 7, 15]
   ];
 
-  const startX = 1020;
-  const gap = 38;
+  const startX = 900;
+  const gap = BALL_RADIUS * 2 + 2;
 
   for (let row = 0; row < rackNumbers.length; row++) {
     const cols = rackNumbers[row];
@@ -778,7 +945,7 @@ function respawnCueBall() {
   cue.y = H / 2;
   cue.vx = 0;
   cue.vy = 0;
-  cue.r = 18;
+  cue.r = BALL_RADIUS;
   cue.pocketed = false;
   cue.falling = false;
   cue.active = true;
