@@ -15,6 +15,11 @@ const spinPad = document.getElementById("spinPad");
 const spinDot = document.getElementById("spinDot");
 const spinLabel = document.getElementById("spinLabel");
 const spinResetBtn = document.getElementById("spinResetBtn");
+const powerControl = document.getElementById("powerControl");
+const powerTrack = document.getElementById("powerTrack");
+const powerFill = document.getElementById("powerFill");
+const powerStick = document.getElementById("powerStick");
+const powerKnob = document.getElementById("powerKnob");
 
 const W = canvas.width;
 const H = canvas.height;
@@ -33,6 +38,7 @@ let aiming = false, aimX = 0, aimY = 0;
 let rawAimX = 0, rawAimY = 0;  // posição real do mouse (alvo do lerp)
 const AIM_LERP = 0.13;          // velocidade de suavização (0=parado, 1=instantâneo)
 let power = 0;
+let powerDragging = false;
 
 // ===== EFEITO (SPIN) =====
 let cueHitX = 0; // -1 (esquerda) a +1 (direita)
@@ -1149,10 +1155,9 @@ function resolveShot() {
 function drawCue() {
   if (!aiming) return;
 
-  // aimX/aimY é onde o jogador puxou o taco para trás,
-  // então a direção de tiro real é o vetor INVERSO
-  let ax = cue.x - aimX;
-  let ay = cue.y - aimY;
+  // direção real do tiro: da branca para o ponto de mira
+  let ax = aimX - cue.x;
+  let ay = aimY - cue.y;
   let distAim = Math.sqrt(ax * ax + ay * ay) || 1;
   let shotDirX = ax / distAim;
   let shotDirY = ay / distAim;
@@ -1265,10 +1270,9 @@ function drawCue() {
     ctx.fill();
   }
 
-  // calcula retrocesso do taco
-  let maxPull = 80;
-  let pull = Math.min(distAim, maxPull);
-  let powerNorm = pull / maxPull;
+  // retrocesso do taco controlado pelo controle lateral externo
+  let maxPull = 92;
+  let pull = 12 + power * maxPull;
 
   // ===== TACO REDESENHADO =====
   ctx.save();
@@ -1429,30 +1433,54 @@ function drawCue() {
   ctx.stroke();
 
   ctx.restore();
+}
 
-  // barra de power
-  const barWidth = 260;
-  const barHeight = 12;
-  const barX = W / 2 - barWidth / 2;
-  const barY = H - 30;
+function updatePowerUI() {
+  if (!powerTrack || !powerFill || !powerKnob || !powerStick) return;
+  const percent = Math.max(0, Math.min(1, power));
+  const trackHeight = powerTrack.clientHeight;
+  const knobBottom = 14 + percent * (trackHeight - 44);
 
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(barX, barY, barWidth, barHeight);
+  powerFill.style.height = `${percent * 100}%`;
+  powerKnob.style.bottom = `${knobBottom}px`;
+  powerStick.style.bottom = `${18 + percent * 34}px`;
+}
 
-  let powerGrad = ctx.createLinearGradient(barX, 0, barX + barWidth, 0);
-  powerGrad.addColorStop(0, "#2ecc71");
-  powerGrad.addColorStop(1, "#e74c3c");
-  ctx.fillStyle = powerGrad;
-  ctx.fillRect(barX, barY, barWidth * powerNorm, barHeight);
+function setPowerFromClientY(clientY) {
+  if (!powerTrack) return;
+  const rect = powerTrack.getBoundingClientRect();
+  const relative = (rect.bottom - clientY) / rect.height;
+  power = Math.max(0, Math.min(1, relative));
+  updatePowerUI();
+}
 
-  ctx.strokeStyle = "rgba(255,255,255,0.4)";
-  ctx.strokeRect(barX, barY, barWidth, barHeight);
+function shootCurrentAim() {
+  if (ballsAreMoving() || gameOver || power < 0.03) return;
 
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  ctx.font = "11px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText("POWER", W / 2, barY - 4);
+  const dx = aimX - cue.x;
+  const dy = aimY - cue.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 0.5) return;
 
+  const nx = dx / dist;
+  const ny = dy / dist;
+  const shotPower = Math.max(0, (power - 0.02) / 0.98);
+  const force = Math.pow(shotPower, 0.9) * 38;
+
+  cue.vx = nx * force;
+  cue.vy = ny * force;
+  cue.topspin  = -cueHitY * force * 0.55;
+  cue.sidespin =  cueHitX * force * 0.45;
+
+  resetSpinSelection();
+  power = 0;
+  updatePowerUI();
+
+  shotCount++;
+  shotInProgress = true;
+  firstHitBall = null;
+  shotPocketedBalls = [];
+  setStatusMessage("");
 }
 
 function updateSpinUI() {
@@ -1532,48 +1560,19 @@ canvas.addEventListener("mousedown", e => {
   rawAimY = e.offsetY;
   aimX = e.offsetX;
   aimY = e.offsetY;
-  power = 0;
 });
 
 canvas.addEventListener("mousemove", e => {
-  if (aiming) {
+  if (!ballsAreMoving() && !gameOver) {
+    aiming = true;
     rawAimX = e.offsetX;
     rawAimY = e.offsetY;
   }
 });
 
-canvas.addEventListener("mouseup", e => {
-  if (aiming) {
-    let dx = cue.x - e.offsetX;
-    let dy = cue.y - e.offsetY;
-    let dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist > 0.5) {
-      let nx = dx / dist;
-      let ny = dy / dist;
-
-      let maxForce = 38;
-      let force = Math.min(dist * 0.18, maxForce);
-      force = Math.pow(force, 0.9);
-
-      cue.vx = nx * force;
-      cue.vy = ny * force;
-
-      // aplica spin na branca com base no ponto selecionado
-      cue.topspin  = -cueHitY * force * 0.55; // cima = topspin positivo
-      cue.sidespin =  cueHitX * force * 0.45; // direita = sidespin positivo
-
-      resetSpinSelection();
-
-      shotCount++;
-      shotInProgress = true;
-      firstHitBall = null;
-      shotPocketedBalls = [];
-      setStatusMessage("");
-    }
-  }
+canvas.addEventListener("mouseleave", () => {
+  if (!ballsAreMoving() && !gameOver) return;
   aiming = false;
-  power = 0;
 });
 
 if (effectBtn) {
@@ -1618,12 +1617,38 @@ window.addEventListener("mouseup", () => {
   spinDragging = false;
 });
 
+if (powerTrack) {
+  powerTrack.addEventListener("mousedown", e => {
+    if (ballsAreMoving() || gameOver) return;
+    ensureAudioContext();
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    powerDragging = true;
+    setPowerFromClientY(e.clientY);
+  });
+}
+
+window.addEventListener("mousemove", e => {
+  if (!powerDragging) return;
+  setPowerFromClientY(e.clientY);
+});
+
+window.addEventListener("mouseup", () => {
+  if (powerDragging) {
+    shootCurrentAim();
+  }
+  powerDragging = false;
+});
+
 // loop
 function loop() {
+  aiming = !ballsAreMoving() && !gameOver;
   // suaviza a mira com lerp
   if (aiming) {
     aimX += (rawAimX - aimX) * AIM_LERP;
     aimY += (rawAimY - aimY) * AIM_LERP;
+  }
+  if (powerControl) {
+    powerControl.classList.toggle("disabled", !aiming);
   }
   drawTable();
   balls.forEach(b => b.update());
@@ -1650,6 +1675,11 @@ function loop() {
 }
 setupBalls();
 updateSpinUI();
+rawAimX = cue.x + 220;
+rawAimY = cue.y;
+aimX = rawAimX;
+aimY = rawAimY;
+updatePowerUI();
 setStatusMessage("Quebre para começar (Jogador 1).");
 updateHUD();
 
@@ -1657,6 +1687,12 @@ if (resetBtn) {
   resetBtn.addEventListener("click", () => {
     shotCount = 0;
     setupBalls();
+    power = 0;
+    updatePowerUI();
+    rawAimX = cue.x + 220;
+    rawAimY = cue.y;
+    aimX = rawAimX;
+    aimY = rawAimY;
     setStatusMessage("Nova partida: Jogador 1 começa.");
     updateHUD();
   });
