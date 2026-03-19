@@ -60,6 +60,9 @@ body {
 
 canvas {
   display: block;
+  width: 1200px;
+  height: 600px;
+  max-width: 100%;
   border-radius: 18px;
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.9);
   touch-action: none;
@@ -279,9 +282,11 @@ canvas {
   }
 
   canvas {
-    width: min(96vw, 1200px);
+    width: min(96vw, calc((100svh - 190px) * 2));
     height: auto;
-    max-height: 58svh;
+    aspect-ratio: 2 / 1;
+    max-width: 96vw;
+    max-height: none;
     border-radius: 14px;
   }
 
