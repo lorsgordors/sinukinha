@@ -5,9 +5,16 @@ const ctx = canvas.getContext("2d");
 const shotsEl = document.getElementById("shots");
 const remainingEl = document.getElementById("remaining");
 const resetBtn = document.getElementById("resetBtn");
+const effectBtn = document.getElementById("effectBtn");
 const currentPlayerEl = document.getElementById("currentPlayer");
 const currentGroupEl = document.getElementById("currentGroup");
 const statusMsgEl = document.getElementById("statusMsg");
+const spinModal = document.getElementById("spinModal");
+const spinCloseBtn = document.getElementById("spinCloseBtn");
+const spinPad = document.getElementById("spinPad");
+const spinDot = document.getElementById("spinDot");
+const spinLabel = document.getElementById("spinLabel");
+const spinResetBtn = document.getElementById("spinResetBtn");
 
 const W = canvas.width;
 const H = canvas.height;
@@ -31,9 +38,7 @@ let power = 0;
 let cueHitX = 0; // -1 (esquerda) a +1 (direita)
 let cueHitY = 0; // -1 (cima/topspin) a +1 (baixo/backspin)
 let spinDragging = false;
-
-// posição e tamanho do widget de efeito
-const SW = { x: W - 80, y: H - 75, r: 32 };
+let spinModalOpen = false;
 
 // estado do jogo 8-ball
 let currentPlayer = 1;
@@ -1188,108 +1193,77 @@ function drawCue() {
 
 }
 
-function drawSpinWidget() {
-  const { x, y, r } = SW;
+function updateSpinUI() {
+  if (!spinDot || !spinPad || !spinLabel) return;
 
-  // fundo escuro
-  ctx.save();
-  ctx.globalAlpha = 0.82;
-  ctx.beginPath();
-  ctx.arc(x, y, r + 8, 0, Math.PI * 2);
-  ctx.fillStyle = "#111";
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  const radius = spinPad.clientWidth / 2;
+  const dotX = radius + cueHitX * radius * 0.82;
+  const dotY = radius + cueHitY * radius * 0.82;
 
-  // mini bola (base branca)
-  let bg = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, 1, x, y, r);
-  bg.addColorStop(0, "#ffffff");
-  bg.addColorStop(0.6, "#cccccc");
-  bg.addColorStop(1, "#888888");
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = bg;
-  ctx.fill();
+  spinDot.style.left = `${dotX}px`;
+  spinDot.style.top = `${dotY}px`;
 
-  // linhas de referência
-  ctx.strokeStyle = "rgba(0,0,0,0.2)";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x + r, y); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x, y + r); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // borda da bola
-  ctx.strokeStyle = "rgba(0,0,0,0.3)";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // ponto de contato (clamp dentro da bola)
-  const dotX = x + cueHitX * r * 0.85;
-  const dotY = y + cueHitY * r * 0.85;
-
-  // cor do ponto de acordo com o efeito
-  let dotColor;
-  if (Math.abs(cueHitX) < 0.2 && Math.abs(cueHitY) < 0.2) {
-    dotColor = "#ffffff"; // centro = sem efeito
-  } else if (cueHitY < -0.3) {
-    dotColor = "#2ecc71"; // topspin = verde
-  } else if (cueHitY > 0.3) {
-    dotColor = "#e74c3c"; // backspin = vermelho
-  } else {
-    dotColor = "#f1c40f"; // sidespin = amarelo
+  let label = "Centro";
+  let dotColor = "#ffffff";
+  if (cueHitY < -0.35) {
+    label = "Topspin";
+    dotColor = "#2ecc71";
+  } else if (cueHitY > 0.35) {
+    label = "Backspin";
+    dotColor = "#e74c3c";
+  } else if (cueHitX < -0.35) {
+    label = "Efeito à esquerda";
+    dotColor = "#f1c40f";
+  } else if (cueHitX > 0.35) {
+    label = "Efeito à direita";
+    dotColor = "#f1c40f";
   }
 
-  ctx.beginPath();
-  ctx.arc(dotX, dotY, 6, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0,0,0,0.4)";
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(dotX, dotY, 5, 0, Math.PI * 2);
-  ctx.fillStyle = dotColor;
-  ctx.fill();
+  spinLabel.textContent = label;
+  spinDot.style.background = dotColor;
+}
 
-  // label
-  let label = "Centro";
-  if (cueHitY < -0.35) label = "Topspin";
-  else if (cueHitY > 0.35) label = "Backspin";
-  else if (cueHitX < -0.35) label = "Esquerda";
-  else if (cueHitX > 0.35) label = "Direita";
+function resetSpinSelection() {
+  cueHitX = 0;
+  cueHitY = 0;
+  updateSpinUI();
+}
 
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
-  ctx.font = "bold 10px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText(label, x, y + r + 18);
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.font = "10px Arial";
-  ctx.fillText("EFEITO", x, y - r - 8);
-  ctx.restore();
+function openSpinModal() {
+  if (!spinModal) return;
+  spinModal.classList.remove("hidden");
+  spinModalOpen = true;
+  updateSpinUI();
+}
+
+function closeSpinModal() {
+  if (!spinModal) return;
+  spinModal.classList.add("hidden");
+  spinModalOpen = false;
+  spinDragging = false;
+}
+
+function setSpinFromPad(clientX, clientY) {
+  if (!spinPad) return;
+  const rect = spinPad.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  const dx = clientX - centerX;
+  const dy = clientY - centerY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const radius = rect.width / 2;
+  const ratio = Math.min(dist, radius) / radius;
+
+  cueHitX = dist > 0 ? (dx / dist) * ratio : 0;
+  cueHitY = dist > 0 ? (dy / dist) * ratio : 0;
+  updateSpinUI();
 }
 
 // controles
-function isOverSpinWidget(ex, ey) {
-  const dx = ex - SW.x, dy = ey - SW.y;
-  return Math.sqrt(dx*dx + dy*dy) <= SW.r + 8;
-}
-
 canvas.addEventListener("mousedown", e => {
   if (ballsAreMoving() || gameOver) return;
   ensureAudioContext();
   if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
-
-  // clicou no widget de efeito?
-  if (isOverSpinWidget(e.offsetX, e.offsetY)) {
-    spinDragging = true;
-    const dx = e.offsetX - SW.x;
-    const dy = e.offsetY - SW.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    const clamped = Math.min(dist, SW.r) / SW.r;
-    const ratio = clamped;
-    cueHitX = dist > 0 ? (dx / Math.sqrt(dx*dx + dy*dy)) * ratio : 0;
-    cueHitY = dist > 0 ? (dy / Math.sqrt(dx*dx + dy*dy)) * ratio : 0;
-    return;
-  }
 
   aiming = true;
   rawAimX = e.offsetX;
@@ -1300,15 +1274,6 @@ canvas.addEventListener("mousedown", e => {
 });
 
 canvas.addEventListener("mousemove", e => {
-  if (spinDragging) {
-    const dx = e.offsetX - SW.x;
-    const dy = e.offsetY - SW.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    const ratio = Math.min(dist, SW.r) / SW.r;
-    cueHitX = dist > 0 ? (dx / dist) * ratio : 0;
-    cueHitY = dist > 0 ? (dy / dist) * ratio : 0;
-    return;
-  }
   if (aiming) {
     rawAimX = e.offsetX;
     rawAimY = e.offsetY;
@@ -1316,10 +1281,6 @@ canvas.addEventListener("mousemove", e => {
 });
 
 canvas.addEventListener("mouseup", e => {
-  if (spinDragging) {
-    spinDragging = false;
-    return;
-  }
   if (aiming) {
     let dx = cue.x - e.offsetX;
     let dy = cue.y - e.offsetY;
@@ -1340,6 +1301,8 @@ canvas.addEventListener("mouseup", e => {
       cue.topspin  = -cueHitY * force * 0.55; // cima = topspin positivo
       cue.sidespin =  cueHitX * force * 0.45; // direita = sidespin positivo
 
+      resetSpinSelection();
+
       shotCount++;
       shotInProgress = true;
       firstHitBall = null;
@@ -1349,6 +1312,48 @@ canvas.addEventListener("mouseup", e => {
   }
   aiming = false;
   power = 0;
+});
+
+if (effectBtn) {
+  effectBtn.addEventListener("click", () => {
+    openSpinModal();
+  });
+}
+
+if (spinCloseBtn) {
+  spinCloseBtn.addEventListener("click", () => {
+    closeSpinModal();
+  });
+}
+
+if (spinResetBtn) {
+  spinResetBtn.addEventListener("click", () => {
+    resetSpinSelection();
+  });
+}
+
+if (spinModal) {
+  spinModal.addEventListener("click", e => {
+    if (e.target === spinModal) {
+      closeSpinModal();
+    }
+  });
+}
+
+if (spinPad) {
+  spinPad.addEventListener("mousedown", e => {
+    spinDragging = true;
+    setSpinFromPad(e.clientX, e.clientY);
+  });
+}
+
+window.addEventListener("mousemove", e => {
+  if (!spinDragging) return;
+  setSpinFromPad(e.clientX, e.clientY);
+});
+
+window.addEventListener("mouseup", () => {
+  spinDragging = false;
 });
 
 // loop
@@ -1375,7 +1380,6 @@ function loop() {
   }
   balls.forEach(b => b.draw());
   drawCue();
-  drawSpinWidget();
   if (shotInProgress && !ballsAreMoving()) {
     resolveShot();
   }
@@ -1383,6 +1387,7 @@ function loop() {
   requestAnimationFrame(loop);
 }
 setupBalls();
+updateSpinUI();
 setStatusMessage("Quebre para começar (Jogador 1).");
 updateHUD();
 

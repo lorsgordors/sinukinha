@@ -23,11 +23,28 @@
       <span id="statusMsg">Quebre para começar (Jogador 1).</span>
     </div>
     <div class="hud-right">
+      <button id="effectBtn">Efeito</button>
       <button id="resetBtn">Reiniciar</button>
     </div>
   </div>
 
-  <canvas id="c" width="1400" height="700"></canvas>
+  <canvas id="c" width="1200" height="600"></canvas>
+
+  <div id="spinModal" class="spin-modal hidden">
+    <div class="spin-panel">
+      <button id="spinCloseBtn" class="spin-close" aria-label="Fechar">×</button>
+      <h3>Efeito na Branca</h3>
+      <p class="spin-help">Clique no ponto da bola para definir topspin, backspin ou efeito lateral.</p>
+      <div id="spinPad" class="spin-pad" role="button" aria-label="Selecionar efeito na branca">
+        <div class="spin-axis spin-axis-h"></div>
+        <div class="spin-axis spin-axis-v"></div>
+        <div id="spinDot" class="spin-dot"></div>
+      </div>
+      <div id="spinLabel" class="spin-label">Centro</div>
+      <button id="spinResetBtn" class="spin-reset">Sem efeito</button>
+    </div>
+  </div>
+
   <script src="main.js"></script>
 </body>
 </html>
