@@ -1549,28 +1549,46 @@ function setSpinFromPad(clientX, clientY) {
   updateSpinUI();
 }
 
+function getCanvasPointFromClient(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left) * (canvas.width / rect.width),
+    y: (clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function setAimFromClient(clientX, clientY) {
+  const point = getCanvasPointFromClient(clientX, clientY);
+  rawAimX = point.x;
+  rawAimY = point.y;
+  if (!aiming) {
+    aimX = point.x;
+    aimY = point.y;
+  }
+}
+
 // controles
-canvas.addEventListener("mousedown", e => {
+canvas.addEventListener("pointerdown", e => {
   if (ballsAreMoving() || gameOver) return;
+  e.preventDefault();
   ensureAudioContext();
   if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
 
   aiming = true;
-  rawAimX = e.offsetX;
-  rawAimY = e.offsetY;
-  aimX = e.offsetX;
-  aimY = e.offsetY;
-});
-
-canvas.addEventListener("mousemove", e => {
-  if (!ballsAreMoving() && !gameOver) {
-    aiming = true;
-    rawAimX = e.offsetX;
-    rawAimY = e.offsetY;
+  setAimFromClient(e.clientX, e.clientY);
+  if (canvas.setPointerCapture) {
+    canvas.setPointerCapture(e.pointerId);
   }
 });
 
-canvas.addEventListener("mouseleave", () => {
+canvas.addEventListener("pointermove", e => {
+  if (!ballsAreMoving() && !gameOver) {
+    aiming = true;
+    setAimFromClient(e.clientX, e.clientY);
+  }
+});
+
+canvas.addEventListener("pointerleave", () => {
   if (!ballsAreMoving() && !gameOver) return;
   aiming = false;
 });
@@ -1602,24 +1620,26 @@ if (spinModal) {
 }
 
 if (spinPad) {
-  spinPad.addEventListener("mousedown", e => {
+  spinPad.addEventListener("pointerdown", e => {
+    e.preventDefault();
     spinDragging = true;
     setSpinFromPad(e.clientX, e.clientY);
   });
 }
 
-window.addEventListener("mousemove", e => {
+window.addEventListener("pointermove", e => {
   if (!spinDragging) return;
   setSpinFromPad(e.clientX, e.clientY);
 });
 
-window.addEventListener("mouseup", () => {
+window.addEventListener("pointerup", () => {
   spinDragging = false;
 });
 
 if (powerTrack) {
-  powerTrack.addEventListener("mousedown", e => {
+  powerTrack.addEventListener("pointerdown", e => {
     if (ballsAreMoving() || gameOver) return;
+    e.preventDefault();
     ensureAudioContext();
     if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
     powerDragging = true;
@@ -1627,12 +1647,12 @@ if (powerTrack) {
   });
 }
 
-window.addEventListener("mousemove", e => {
+window.addEventListener("pointermove", e => {
   if (!powerDragging) return;
   setPowerFromClientY(e.clientY);
 });
 
-window.addEventListener("mouseup", () => {
+window.addEventListener("pointerup", () => {
   if (powerDragging) {
     shootCurrentAim();
   }
