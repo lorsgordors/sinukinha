@@ -918,45 +918,163 @@ function drawCue() {
   let pull = Math.min(distAim, maxPull);
   let powerNorm = pull / maxPull;
 
-  // ===== taco mais detalhado =====
+  // ===== TACO REDESENHADO =====
   ctx.save();
   ctx.translate(cue.x, cue.y);
-  ctx.rotate(angle); // angle aponta para frente; taco desenhado em x negativo = atrás da branca
+  ctx.rotate(angle);
 
-  const cueLength = 200;
-  const gapFromBall = cue.r + 6;
+  const cueLength = 420;
+  const gapFromBall = cue.r + 7;
   const offset = gapFromBall + pull;
 
-  // haste principal (somente atrás da branca)
-  let grad = ctx.createLinearGradient(-offset - cueLength, 0, -offset, 0);
-  grad.addColorStop(0, "#f7e8c4");
-  grad.addColorStop(0.35, "#c69c6d");
-  grad.addColorStop(1, "#5b3b1c");
-  ctx.fillStyle = grad;
+  const tipX    = -offset;           // ponta (giz)
+  const buttX   = -offset - cueLength; // cabo
+
+  // --- sombra do taco ---
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur  = 8;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 3;
   ctx.beginPath();
-  ctx.moveTo(-offset - cueLength, -3);
-  ctx.lineTo(-offset, -4.5);
-  ctx.lineTo(-offset, 4.5);
-  ctx.lineTo(-offset - cueLength, 3);
+  ctx.moveTo(buttX,  -9);
+  ctx.lineTo(tipX,   -2);
+  ctx.lineTo(tipX,    2);
+  ctx.lineTo(buttX,   9);
+  ctx.closePath();
+  ctx.fillStyle = "#000";
+  ctx.fill();
+  ctx.restore();
+
+  // --- madeira principal: gradiente multi-stop radial por segmento ---
+  // segmento frontal (fino, 65% do comprimento) — tons de madeira clara
+  const seg1Start = tipX;
+  const seg1End   = buttX + cueLength * 0.65;
+  let woodGrad = ctx.createLinearGradient(0, -2, 0, 2);
+  woodGrad.addColorStop(0,   "#f2d9a2");
+  woodGrad.addColorStop(0.3, "#e0b96a");
+  woodGrad.addColorStop(0.7, "#c69040");
+  woodGrad.addColorStop(1,   "#9a5c20");
+  ctx.fillStyle = woodGrad;
+  ctx.beginPath();
+  ctx.moveTo(seg1End,   -6.5);
+  ctx.lineTo(seg1Start, -2);
+  ctx.lineTo(seg1Start,  2);
+  ctx.lineTo(seg1End,    6.5);
   ctx.closePath();
   ctx.fill();
 
-  // empunhadura
-  let buttGrad = ctx.createLinearGradient(0, 0, 40, 0);
-  buttGrad.addColorStop(0, "#111");
-  buttGrad.addColorStop(1, "#333");
-  ctx.fillStyle = buttGrad;
-  ctx.fillRect(-offset - cueLength + 10, -6.5, 40, 13);
-
-  // ponta de giz
-  ctx.fillStyle = "#f5f5f5";
+  // veio de madeira (linhas sutis longitudinais)
+  ctx.save();
   ctx.beginPath();
-  ctx.moveTo(-offset, -2.6);
-  ctx.lineTo(-offset + 20, -3);
-  ctx.lineTo(-offset + 20, 3);
-  ctx.lineTo(-offset, 2.6);
+  ctx.moveTo(seg1End,   -6.5);
+  ctx.lineTo(seg1Start, -2);
+  ctx.lineTo(seg1Start,  2);
+  ctx.lineTo(seg1End,    6.5);
+  ctx.closePath();
+  ctx.clip();
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 1;
+  for (let v = 0; v < 3; v++) {
+    const yv = -2.5 + v * 2.5;
+    ctx.beginPath();
+    ctx.moveTo(seg1Start, yv);
+    ctx.lineTo(seg1End,   yv * 2.2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // segmento traseiro (cabo, 35%) — madeira escura + anel metálico
+  const cabX = seg1End;
+  let cabGrad = ctx.createLinearGradient(0, -9, 0, 9);
+  cabGrad.addColorStop(0,   "#5a2d0c");
+  cabGrad.addColorStop(0.35, "#8b4513");
+  cabGrad.addColorStop(0.65, "#6b320e");
+  cabGrad.addColorStop(1,   "#3d1a06");
+  ctx.fillStyle = cabGrad;
+  ctx.beginPath();
+  ctx.moveTo(buttX, -9);
+  ctx.lineTo(cabX,  -6.5);
+  ctx.lineTo(cabX,   6.5);
+  ctx.lineTo(buttX,  9);
   ctx.closePath();
   ctx.fill();
+
+  // faixa decorativa de wrapped grip (linhas diagonais)
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(buttX, -9);
+  ctx.lineTo(cabX,  -6.5);
+  ctx.lineTo(cabX,   6.5);
+  ctx.lineTo(buttX,  9);
+  ctx.closePath();
+  ctx.clip();
+  ctx.strokeStyle = "rgba(0,0,0,0.28)";
+  ctx.lineWidth = 3.5;
+  for (let g = 0; g < 18; g++) {
+    const gx = buttX + g * 13;
+    ctx.beginPath();
+    ctx.moveTo(gx, -10);
+    ctx.lineTo(gx + 8, 10);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // anel metálico separador (entre cabo e haste)
+  const ringX = cabX;
+  let ringGrad = ctx.createLinearGradient(0, -8, 0, 8);
+  ringGrad.addColorStop(0,   "#ffffff");
+  ringGrad.addColorStop(0.3, "#d4af37");
+  ringGrad.addColorStop(0.7, "#a07830");
+  ringGrad.addColorStop(1,   "#5a3a10");
+  ctx.fillStyle = ringGrad;
+  ctx.fillRect(ringX - 5, -8, 10, 16);
+  // reflexo no anel
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.fillRect(ringX - 4, -7, 4, 4);
+
+  // segundo anel mais fino (decorativo, 1/3 do cabo)
+  const ring2X = buttX + cueLength * 0.12;
+  let ring2Grad = ctx.createLinearGradient(0, -8, 0, 8);
+  ring2Grad.addColorStop(0, "#c8c8c8");
+  ring2Grad.addColorStop(1, "#606060");
+  ctx.fillStyle = ring2Grad;
+  ctx.fillRect(ring2X - 3, -9, 6, 18);
+
+  // ponteira de giz (azul-acinzentado)
+  const chalkLen = 18;
+  let chalkGrad = ctx.createLinearGradient(tipX, 0, tipX + chalkLen, 0);
+  chalkGrad.addColorStop(0,   "#7ec8e3");
+  chalkGrad.addColorStop(0.5, "#5b9eb8");
+  chalkGrad.addColorStop(1,   "#3a7a96");
+  ctx.fillStyle = chalkGrad;
+  ctx.beginPath();
+  ctx.moveTo(tipX,            -1.5);
+  ctx.lineTo(tipX + chalkLen, -2.2);
+  ctx.lineTo(tipX + chalkLen,  2.2);
+  ctx.lineTo(tipX,             1.5);
+  ctx.closePath();
+  ctx.fill();
+  // brilho na ponta
+  ctx.fillStyle = "rgba(255,255,255,0.45)";
+  ctx.beginPath();
+  ctx.moveTo(tipX,            -0.5);
+  ctx.lineTo(tipX + chalkLen * 0.6, -0.8);
+  ctx.lineTo(tipX + chalkLen * 0.6,  0.3);
+  ctx.lineTo(tipX,             0.3);
+  ctx.closePath();
+  ctx.fill();
+
+  // contorno final do taco inteiro
+  ctx.strokeStyle = "rgba(0,0,0,0.5)";
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(buttX,  -9);
+  ctx.lineTo(tipX,   -1.5);
+  ctx.lineTo(tipX,    1.5);
+  ctx.lineTo(buttX,   9);
+  ctx.closePath();
+  ctx.stroke();
 
   ctx.restore();
 
