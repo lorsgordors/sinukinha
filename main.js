@@ -63,12 +63,6 @@ function darkenColor(hex, factor) {
   return `rgb(${r},${g},${b})`;
 }
 
-// caçapas
-const pockets = [
-  [60, 60], [W / 2, 50], [W - 60, 60],
-  [60, H - 60], [W / 2, H - 50], [W - 60, H - 60]
-];
-
 // AUDIO
 let audioCtx = null;
 
@@ -111,10 +105,20 @@ function playPocketSound() {
 // ===== MESA =====
 const rX = 60, rY = 60;          // posição interior do feltro
 const rW = W - rX * 2, rH = H - rY * 2; // dimensões do feltro
-const pocketR = 24;
+const pocketR = 22;  // raio de detecção (pouco maior que a bola r=18)
+
+// caçapas — posicionadas no encaixe das quinas/bordas
+const pockets = [
+  [rX - 2,  rY - 2],              // canto superior-esquerdo
+  [W / 2,   rY - 6],              // lateral superior
+  [W - rX + 2, rY - 2],           // canto superior-direito
+  [rX - 2,  H - rY + 2],          // canto inferior-esquerdo
+  [W / 2,   H - rY + 6],          // lateral inferior
+  [W - rX + 2, H - rY + 2]        // canto inferior-direito
+];
 
 function drawTable() {
-  // === fundo de madeira ===
+  // === fundo de madeira (borda externa) ===
   let wood = ctx.createLinearGradient(0, 0, W, H);
   wood.addColorStop(0,   "#7a4f28");
   wood.addColorStop(0.3, "#5c3515");
@@ -122,8 +126,8 @@ function drawTable() {
   ctx.fillStyle = wood;
   ctx.fillRect(0, 0, W, H);
 
-  // veios de madeira sutis
-  ctx.strokeStyle = "rgba(0,0,0,0.12)";
+  // veios de madeira
+  ctx.strokeStyle = "rgba(0,0,0,0.08)";
   ctx.lineWidth = 1;
   for (let i = 0; i < W; i += 28) {
     ctx.beginPath();
@@ -132,53 +136,7 @@ function drawTable() {
     ctx.stroke();
   }
 
-  // === trilhos (cushion) ===
-  const railGrad = ctx.createLinearGradient(0, 0, 0, H);
-  railGrad.addColorStop(0,   "#3a6b2a");
-  railGrad.addColorStop(0.5, "#2a5220");
-  railGrad.addColorStop(1,   "#1a3514");
-
-  // desenhamos os 4 trilhos como trapézios separados
-  const inset = 10; // espessura visual do trilho
-  const corners = [
-    [rX, rY], [rX + rW, rY], [rX + rW, rY + rH], [rX, rY + rH]
-  ];
-
-  ctx.fillStyle = railGrad;
-  // topo
-  ctx.beginPath();
-  ctx.moveTo(rX - inset, rY - inset);
-  ctx.lineTo(rX + rW + inset, rY - inset);
-  ctx.lineTo(rX + rW, rY);
-  ctx.lineTo(rX, rY);
-  ctx.closePath();
-  ctx.fill();
-  // base
-  ctx.beginPath();
-  ctx.moveTo(rX - inset, rY + rH + inset);
-  ctx.lineTo(rX + rW + inset, rY + rH + inset);
-  ctx.lineTo(rX + rW, rY + rH);
-  ctx.lineTo(rX, rY + rH);
-  ctx.closePath();
-  ctx.fill();
-  // esquerda
-  ctx.beginPath();
-  ctx.moveTo(rX - inset, rY - inset);
-  ctx.lineTo(rX - inset, rY + rH + inset);
-  ctx.lineTo(rX, rY + rH);
-  ctx.lineTo(rX, rY);
-  ctx.closePath();
-  ctx.fill();
-  // direita
-  ctx.beginPath();
-  ctx.moveTo(rX + rW + inset, rY - inset);
-  ctx.lineTo(rX + rW + inset, rY + rH + inset);
-  ctx.lineTo(rX + rW, rY + rH);
-  ctx.lineTo(rX + rW, rY);
-  ctx.closePath();
-  ctx.fill();
-
-  // === feltro ===
+  // === feltro verde ===
   let cloth = ctx.createRadialGradient(W/2, H/2, 80, W/2, H/2, 580);
   cloth.addColorStop(0,   "#27a045");
   cloth.addColorStop(0.6, "#1a7a35");
@@ -186,18 +144,78 @@ function drawTable() {
   ctx.fillStyle = cloth;
   ctx.fillRect(rX, rY, rW, rH);
 
-  // textura de pano sutil (linhas horizontais finas)
-  ctx.strokeStyle = "rgba(255,255,255,0.025)";
+  // textura de pano
+  ctx.strokeStyle = "rgba(255,255,255,0.02)";
   ctx.lineWidth = 1;
-  for (let y = rY; y < rY + rH; y += 4) {
+  for (let yy = rY; yy < rY + rH; yy += 4) {
     ctx.beginPath();
-    ctx.moveTo(rX, y);
-    ctx.lineTo(rX + rW, y);
+    ctx.moveTo(rX, yy);
+    ctx.lineTo(rX + rW, yy);
     ctx.stroke();
   }
 
-  // === linha de cabeça (head line) ===
-  ctx.strokeStyle = "rgba(255,255,255,0.15)";
+  // === caçapas (buracos negros recortados no feltro) ===
+  const vr = 16;
+  pockets.forEach(p => {
+    const px = p[0], py = p[1];
+    // buraco
+    let hole = ctx.createRadialGradient(px, py, 0, px, py, vr);
+    hole.addColorStop(0,   "#000");
+    hole.addColorStop(0.85, "#080808");
+    hole.addColorStop(1,    "#1a1008");
+    ctx.beginPath();
+    ctx.arc(px, py, vr, 0, Math.PI * 2);
+    ctx.fillStyle = hole;
+    ctx.fill();
+    // borda escura
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+
+  // === borracha dos trilhos (uma faixa verde-escura sólida) ===
+  const bT = 8; // espessura da borracha
+  const ch = 32; // recuo nas quinas
+  const mg = 22; // recuo nas laterais
+
+  ctx.fillStyle = "#1e5c1a";
+
+  // topo-esquerdo
+  ctx.fillRect(rX + ch, rY, W/2 - mg - rX - ch, bT);
+  // topo-direito
+  ctx.fillRect(W/2 + mg, rY, rX + rW - ch - W/2 - mg, bT);
+  // base-esquerda
+  ctx.fillRect(rX + ch, rY + rH - bT, W/2 - mg - rX - ch, bT);
+  // base-direita
+  ctx.fillRect(W/2 + mg, rY + rH - bT, rX + rW - ch - W/2 - mg, bT);
+  // lateral esquerda
+  ctx.fillRect(rX, rY + ch, bT, rH - ch * 2);
+  // lateral direita
+  ctx.fillRect(rX + rW - bT, rY + ch, bT, rH - ch * 2);
+
+  // pequeno chanfro arredondado nas pontas da borracha
+  const dots = [
+    // topo-esquerdo
+    [rX + ch, rY + bT/2], [W/2 - mg, rY + bT/2],
+    // topo-direito
+    [W/2 + mg, rY + bT/2], [rX + rW - ch, rY + bT/2],
+    // base-esquerda
+    [rX + ch, rY + rH - bT/2], [W/2 - mg, rY + rH - bT/2],
+    // base-direita
+    [W/2 + mg, rY + rH - bT/2], [rX + rW - ch, rY + rH - bT/2],
+    // laterais
+    [rX + bT/2, rY + ch], [rX + bT/2, rY + rH - ch],
+    [rX + rW - bT/2, rY + ch], [rX + rW - bT/2, rY + rH - ch],
+  ];
+  ctx.fillStyle = "#1e5c1a";
+  dots.forEach(d => {
+    ctx.beginPath();
+    ctx.arc(d[0], d[1], bT/2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // === marcas de referência ===
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
   ctx.lineWidth = 1.5;
   ctx.setLineDash([]);
   const headX = rX + rW * 0.27;
@@ -206,50 +224,20 @@ function drawTable() {
   ctx.lineTo(headX, rY + rH);
   ctx.stroke();
 
-  // ponto de foot (posição do rack)
   ctx.beginPath();
-  ctx.arc(rX + rW * 0.75, H / 2, 4, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.arc(rX + rW * 0.75, H / 2, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
   ctx.fill();
 
-  // ponto central
   ctx.beginPath();
-  ctx.arc(W / 2, H / 2, 4, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.arc(W / 2, H / 2, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
   ctx.fill();
 
-  // === borda exterior dupla ===
-  ctx.strokeStyle = "rgba(0,0,0,0.6)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(rX - inset - 2, rY - inset - 2, rW + (inset + 2)*2, rH + (inset + 2)*2);
-  ctx.strokeStyle = "rgba(255,220,140,0.25)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(rX - inset - 1, rY - inset - 1, rW + (inset+1)*2, rH + (inset+1)*2);
-
-  // === caçapas ===
-  pockets.forEach(p => {
-    const px = p[0], py = p[1];
-    // buraco
-    let hole = ctx.createRadialGradient(px, py, 2, px, py, pocketR);
-    hole.addColorStop(0,   "#000");
-    hole.addColorStop(0.7, "#111");
-    hole.addColorStop(1,   "#2a2a2a");
-    ctx.beginPath();
-    ctx.arc(px, py, pocketR, 0, Math.PI * 2);
-    ctx.fillStyle = hole;
-    ctx.fill();
-    // anel metálico
-    ctx.beginPath();
-    ctx.arc(px, py, pocketR + 3, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(180,140,80,0.7)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    // brilho interno
-    ctx.beginPath();
-    ctx.arc(px - 6, py - 6, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.07)";
-    ctx.fill();
-  });
+  // === borda da madeira (única, limpa) ===
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(rX - 1, rY - 1, rW + 2, rH + 2);
 }
 
 // ===== BOLA =====
@@ -496,12 +484,23 @@ class Ball {
     if (Math.abs(this.vx) < 0.01) this.vx = 0;
     if (Math.abs(this.vy) < 0.01) this.vy = 0;
 
+    // função auxiliar: perto de uma caçapa?
+    const nearPocket = (x, y, threshold) => {
+      return pockets.some(p => {
+        const dx = x - p[0], dy = y - p[1];
+        return Math.sqrt(dx * dx + dy * dy) < threshold;
+      });
+    };
+
     let margin = rX + 2;
 
-    if (this.x < margin) { this.x = margin; this.vx = Math.abs(this.vx) * wallRestitution; }
-    if (this.x > W - margin) { this.x = W - margin; this.vx = -Math.abs(this.vx) * wallRestitution; }
-    if (this.y < margin) { this.y = margin; this.vy = Math.abs(this.vy) * wallRestitution; }
-    if (this.y > H - margin) { this.y = H - margin; this.vy = -Math.abs(this.vy) * wallRestitution; }
+    // só quica nas paredes se NÃO estiver perto de uma caçapa
+    if (!nearPocket(this.x, this.y, pocketR + 10)) {
+      if (this.x < margin) { this.x = margin; this.vx = Math.abs(this.vx) * wallRestitution; }
+      if (this.x > W - margin) { this.x = W - margin; this.vx = -Math.abs(this.vx) * wallRestitution; }
+      if (this.y < margin) { this.y = margin; this.vy = Math.abs(this.vy) * wallRestitution; }
+      if (this.y > H - margin) { this.y = H - margin; this.vy = -Math.abs(this.vy) * wallRestitution; }
+    }
 
     pockets.forEach(p => {
       let dx = this.x - p[0];
@@ -1244,8 +1243,8 @@ canvas.addEventListener("mouseup", e => {
       let nx = dx / dist;
       let ny = dy / dist;
 
-      let maxForce = 26;
-      let force = Math.min(dist * 0.13, maxForce);
+      let maxForce = 38;
+      let force = Math.min(dist * 0.18, maxForce);
       force = Math.pow(force, 0.9);
 
       cue.vx = nx * force;
