@@ -116,7 +116,11 @@ const TABLE_CORNER_GAP = 32;
 const TABLE_MIDDLE_GAP = 22;
 const BALL_RADIUS = 14;
 const CORNER_POCKET_BACKSET = 16;
-const SIDE_POCKET_BACKSET = 8;
+const SIDE_POCKET_BACKSET = 16;
+const CORNER_MOUTH_OFFSET = 42;
+const CORNER_SINK_OFFSET = 14;
+const SIDE_MOUTH_OFFSET = 16;
+const SIDE_SINK_OFFSET = 6;
 
 // caçapas — posicionadas no encaixe das quinas/bordas
 const pockets = [
@@ -135,9 +139,9 @@ function getPocketCaptureData(px, py) {
     const isTop = py < H / 2;
     return {
       mouthX: px,
-      mouthY: py + (isTop ? 22 : -22),
+      mouthY: py + (isTop ? SIDE_MOUTH_OFFSET : -SIDE_MOUTH_OFFSET),
       sinkX: px,
-      sinkY: py + (isTop ? 8 : -8)
+      sinkY: py + (isTop ? SIDE_SINK_OFFSET : -SIDE_SINK_OFFSET)
     };
   }
 
@@ -145,10 +149,10 @@ function getPocketCaptureData(px, py) {
   const sy = py < H / 2 ? 1 : -1;
 
   return {
-    mouthX: px + sx * 34,
-    mouthY: py + sy * 34,
-    sinkX: px + sx * 10,
-    sinkY: py + sy * 10
+    mouthX: px + sx * CORNER_MOUTH_OFFSET,
+    mouthY: py + sy * CORNER_MOUTH_OFFSET,
+    sinkX: px + sx * CORNER_SINK_OFFSET,
+    sinkY: py + sy * CORNER_SINK_OFFSET
   };
 }
 
@@ -157,28 +161,28 @@ function getPocketJawData(px, py) {
 
   if (isSidePocket) {
     const isTop = py < H / 2;
-    const sy = isTop ? -1 : 1;
+    const sy = isTop ? 1 : -1;
     return {
       type: "side",
       jawRadius: 6,
       points: [
-        { x: px - 22, y: py + sy * 4 },
-        { x: px + 22, y: py + sy * 4 }
+        { x: px - 24, y: py + sy * 6 },
+        { x: px + 24, y: py + sy * 6 }
       ]
     };
   }
 
   const sx = px < W / 2 ? 1 : -1;
   const sy = py < H / 2 ? 1 : -1;
-  const mouthX = px + sx * 34;
-  const mouthY = py + sy * 34;
+  const mouthX = px + sx * CORNER_MOUTH_OFFSET;
+  const mouthY = py + sy * CORNER_MOUTH_OFFSET;
 
   return {
     type: "corner",
     jawRadius: 5,
     points: [
-      { x: mouthX + sx * 11, y: mouthY - sy * 12 },
-      { x: mouthX - sx * 12, y: mouthY + sy * 11 }
+      { x: mouthX + sx * 14, y: mouthY - sy * 15 },
+      { x: mouthX - sx * 15, y: mouthY + sy * 14 }
     ]
   };
 }
@@ -188,8 +192,8 @@ function getPocketGuideData(px, py) {
 
   if (isSidePocket) {
     const isTop = py < H / 2;
-    const mouthY = py + (isTop ? 22 : -22);
-    const sinkY = py + (isTop ? 8 : -8);
+    const mouthY = py + (isTop ? SIDE_MOUTH_OFFSET : -SIDE_MOUTH_OFFSET);
+    const sinkY = py + (isTop ? SIDE_SINK_OFFSET : -SIDE_SINK_OFFSET);
     return {
       mouthX: px,
       mouthY,
@@ -197,9 +201,9 @@ function getPocketGuideData(px, py) {
       sinkY,
       dirX: 0,
       dirY: isTop ? -1 : 1,
-      halfWidth: 18,
-      startAlong: -8,
-      endAlong: 26
+      halfWidth: 20,
+      startAlong: -10,
+      endAlong: 32
     };
   }
 
@@ -207,15 +211,15 @@ function getPocketGuideData(px, py) {
   const sy = py < H / 2 ? 1 : -1;
 
   return {
-    mouthX: px + sx * 34,
-    mouthY: py + sy * 34,
-    sinkX: px + sx * 10,
-    sinkY: py + sy * 10,
+    mouthX: px + sx * CORNER_MOUTH_OFFSET,
+    mouthY: py + sy * CORNER_MOUTH_OFFSET,
+    sinkX: px + sx * CORNER_SINK_OFFSET,
+    sinkY: py + sy * CORNER_SINK_OFFSET,
     dirX: -sx / Math.sqrt(2),
     dirY: -sy / Math.sqrt(2),
-    halfWidth: 16,
-    startAlong: -10,
-    endAlong: 38
+    halfWidth: 20,
+    startAlong: -12,
+    endAlong: 52
   };
 }
 
@@ -238,9 +242,12 @@ function getPocketMouthState(ballX, ballY, px, py, radius) {
 
 function isInsideRealPocket(ballX, ballY, px, py, radius) {
   const capture = getPocketCaptureData(px, py);
+  const isSidePocket = Math.abs(px - W / 2) < 1;
   const dx = ballX - capture.sinkX;
   const dy = ballY - capture.sinkY;
-  const sinkThreshold = Math.max(6, pocketR - radius * 0.45);
+  const sinkThreshold = isSidePocket
+    ? Math.max(6, pocketR - radius * 0.45)
+    : Math.max(8, pocketR + 4 - radius * 0.35);
   return Math.sqrt(dx * dx + dy * dy) < sinkThreshold;
 }
 
@@ -304,17 +311,17 @@ function drawTable() {
   }
 
   function drawCornerPocket(px, py, sx, sy) {
-    const mouthX = px + sx * 34;
-    const mouthY = py + sy * 34;
+    const mouthX = px + sx * CORNER_MOUTH_OFFSET;
+    const mouthY = py + sy * CORNER_MOUTH_OFFSET;
 
     // canaleta visual sobre o feltro indo ate a boca da caçapa
     const lane = ctx.createLinearGradient(mouthX + sx * 12, mouthY + sy * 12, px + sx * 3, py + sy * 3);
     lane.addColorStop(0, "rgba(0,0,0,0)");
     lane.addColorStop(1, "rgba(0,0,0,0.40)");
     ctx.beginPath();
-    ctx.moveTo(mouthX + sx * 16, mouthY - sy * 16);
-    ctx.lineTo(mouthX - sx * 16, mouthY + sy * 16);
-    ctx.lineTo(px + sx * 10, py + sy * 10);
+    ctx.moveTo(mouthX + sx * 20, mouthY - sy * 20);
+    ctx.lineTo(mouthX - sx * 20, mouthY + sy * 20);
+    ctx.lineTo(px + sx * 12, py + sy * 12);
     ctx.closePath();
     ctx.fillStyle = lane;
     ctx.fill();
@@ -322,8 +329,8 @@ function drawTable() {
     // garganta preta da caçapa saindo em diagonal da quina
     ctx.beginPath();
     ctx.moveTo(px + sx * 2, py + sy * 2);
-    ctx.lineTo(mouthX + sx * 14, mouthY - sy * 14);
-    ctx.lineTo(mouthX - sx * 14, mouthY + sy * 14);
+    ctx.lineTo(mouthX + sx * 18, mouthY - sy * 18);
+    ctx.lineTo(mouthX - sx * 18, mouthY + sy * 18);
     ctx.closePath();
     ctx.fillStyle = "#050505";
     ctx.fill();
@@ -331,46 +338,49 @@ function drawTable() {
     // jaws de couro nas duas faces da quina
     ctx.fillStyle = leatherColor;
     ctx.beginPath();
-    ctx.arc(mouthX + sx * 11, mouthY - sy * 12, 5, 0, Math.PI * 2);
+    ctx.arc(mouthX + sx * 14, mouthY - sy * 15, 5.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(mouthX - sx * 12, mouthY + sy * 11, 5, 0, Math.PI * 2);
+    ctx.arc(mouthX - sx * 15, mouthY + sy * 14, 5.5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = leatherEdge;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(mouthX + sx * 11, mouthY - sy * 12, 5, 0, Math.PI * 2);
+    ctx.arc(mouthX + sx * 14, mouthY - sy * 15, 5.5, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(mouthX - sx * 12, mouthY + sy * 11, 5, 0, Math.PI * 2);
+    ctx.arc(mouthX - sx * 15, mouthY + sy * 14, 5.5, 0, Math.PI * 2);
     ctx.stroke();
 
-    drawPocketCore(px + sx * 12, py + sy * 12, pocketRadius, pocketRadius);
+    drawPocketCore(px + sx * CORNER_SINK_OFFSET, py + sy * CORNER_SINK_OFFSET, pocketRadius + 3, pocketRadius + 3);
   }
 
   function drawSidePocket(px, py, isTop) {
-    const sy = isTop ? -1 : 1;
+    const sy = isTop ? 1 : -1;
+    const borderY = isTop ? rY : rY + rH;
+    const mouthY = py + sy * SIDE_MOUTH_OFFSET;
+    const sinkY = py + sy * SIDE_SINK_OFFSET;
 
     // canaleta visual na boca da caçapa lateral
-    const lane = ctx.createLinearGradient(px, py + sy * 24, px, py + sy * 4);
+    const lane = ctx.createLinearGradient(px, borderY, px, py + sy * 2);
     lane.addColorStop(0, "rgba(0,0,0,0)");
-    lane.addColorStop(1, "rgba(0,0,0,0.30)");
+    lane.addColorStop(1, "rgba(0,0,0,0.36)");
     ctx.beginPath();
-    ctx.moveTo(px - 30, py + sy * 18);
-    ctx.lineTo(px + 30, py + sy * 18);
-    ctx.lineTo(px + 18, py + sy * 6);
-    ctx.lineTo(px - 18, py + sy * 6);
+    ctx.moveTo(px - 34, borderY);
+    ctx.lineTo(px + 34, borderY);
+    ctx.lineTo(px + 18, py + sy * 8);
+    ctx.lineTo(px - 18, py + sy * 8);
     ctx.closePath();
     ctx.fillStyle = lane;
     ctx.fill();
 
     // garganta da caçapa lateral com boca mais larga e interior oval
     ctx.beginPath();
-    ctx.moveTo(px - 30, py);
-    ctx.lineTo(px - 18, py + sy * 12);
-    ctx.lineTo(px + 18, py + sy * 12);
-    ctx.lineTo(px + 30, py);
+    ctx.moveTo(px - 34, borderY);
+    ctx.lineTo(px - 20, py + sy * 10);
+    ctx.lineTo(px + 20, py + sy * 10);
+    ctx.lineTo(px + 34, borderY);
     ctx.closePath();
     ctx.fillStyle = "#050505";
     ctx.fill();
@@ -378,22 +388,22 @@ function drawTable() {
     // jaws de couro dos dois lados
     ctx.fillStyle = leatherColor;
     ctx.beginPath();
-    ctx.arc(px - 22, py + sy * 4, 6, 0, Math.PI * 2);
+    ctx.arc(px - 25, py + sy * 7, 6.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(px + 22, py + sy * 4, 6, 0, Math.PI * 2);
+    ctx.arc(px + 25, py + sy * 7, 6.5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = leatherEdge;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(px - 22, py + sy * 4, 6, 0, Math.PI * 2);
+    ctx.arc(px - 25, py + sy * 7, 6.5, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(px + 22, py + sy * 4, 6, 0, Math.PI * 2);
+    ctx.arc(px + 25, py + sy * 7, 6.5, 0, Math.PI * 2);
     ctx.stroke();
 
-    drawPocketCore(px, py + sy * 7, 18, 12);
+    drawPocketCore(px, sinkY, 18, 14);
   }
 
   drawCornerPocket(pockets[0][0], pockets[0][1], 1, 1);
