@@ -7,47 +7,19 @@ body {
   overscroll-behavior: none;
   overflow: hidden;
   min-height: 100svh;
-}
-
-h2 {
-  margin: 18px 0 8px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.hud {
-  max-width: 1360px;
-  margin: 0 auto 8px;
-  padding: 6px 16px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  box-sizing: border-box;
-  background: radial-gradient(circle at top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5));
-  border-radius: 10px;
-  box-shadow: 0 0 18px rgba(0, 0, 0, 0.8);
+  justify-content: center;
 }
 
-.hud-left {
+.game-stage {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  justify-content: center;
 }
 
-.hud .label {
-  opacity: 0.8;
-}
-
-.hud-center {
-  flex: 1;
-  text-align: center;
-  font-size: 13px;
-  padding: 0 10px;
-  color: #f1f1f1;
-}
-
-.hud-right button {
+.table-controls button {
   padding: 6px 16px;
   border-radius: 999px;
   border: none;
@@ -61,23 +33,27 @@ h2 {
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 
-.hud-right {
+.table-controls {
+  position: absolute;
+  top: 14px;
+  left: 14px;
   display: flex;
   align-items: center;
   gap: 10px;
+  z-index: 3;
 }
 
 #effectBtn {
   background: linear-gradient(135deg, #d35400, #f39c12);
 }
 
-.hud-right button:hover {
+.table-controls button:hover {
   transform: translateY(-1px);
   box-shadow: 0 0 16px rgba(0, 0, 0, 0.9);
   filter: brightness(1.05);
 }
 
-.hud-right button:active {
+.table-controls button:active {
   transform: translateY(0);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
 }
@@ -90,8 +66,8 @@ canvas {
 }
 
 .table-shell {
+  position: relative;
   width: fit-content;
-  margin: 16px auto 24px;
   display: flex;
   align-items: center;
   gap: 26px;
@@ -264,38 +240,28 @@ canvas {
   touch-action: none;
 }
 
-.hud-right button,
+.table-controls button,
 .spin-close,
 .spin-reset {
   touch-action: manipulation;
 }
 
 @media (max-width: 900px) {
-  h2 {
-    margin: 10px 0 6px;
-    font-size: 20px;
-  }
-
-  .hud {
-    max-width: calc(100vw - 12px);
-    margin: 0 6px 6px;
-    padding: 8px 10px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .hud-left,
-  .hud-center,
-  .hud-right {
-    width: 100%;
-    justify-content: center;
-  }
-
   .table-shell {
     width: calc(100vw - 10px);
-    margin: 8px auto 10px;
     gap: 10px;
     justify-content: center;
+  }
+
+  .table-controls {
+    top: 8px;
+    left: 8px;
+    gap: 6px;
+  }
+
+  .table-controls button {
+    padding: 6px 12px;
+    font-size: 12px;
   }
 
   canvas {

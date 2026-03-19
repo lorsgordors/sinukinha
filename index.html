@@ -7,29 +7,12 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h2>🎱 Sinuca Estilo 8 Ball Pool - Power Shot</h2>
-
-  <div class="hud">
-    <div class="hud-left">
-      <span class="label">Jogador:</span>
-      <span id="currentPlayer">1</span>
-      <span class="label">Grupo:</span>
-      <span id="currentGroup">Indefinido</span>
-      <span class="label">Tacadas:</span>
-      <span id="shots">0</span>
-      <span class="label">Bolas na mesa:</span>
-      <span id="remaining">15</span>
-    </div>
-    <div class="hud-center">
-      <span id="statusMsg">Quebre para começar (Jogador 1).</span>
-    </div>
-    <div class="hud-right">
-      <button id="effectBtn">Efeito</button>
-      <button id="resetBtn">Reiniciar</button>
-    </div>
-  </div>
-
-  <div class="table-shell">
+  <div class="game-stage">
+    <div class="table-shell">
+      <div class="table-controls">
+        <button id="effectBtn">Efeito</button>
+        <button id="resetBtn">Reiniciar</button>
+      </div>
     <canvas id="c" width="1200" height="600"></canvas>
 
     <div id="powerControl" class="power-control">
@@ -40,6 +23,7 @@
         <div id="powerKnob" class="power-knob"></div>
       </div>
       <div class="power-hint">Puxe e solte</div>
+    </div>
     </div>
   </div>
 
