@@ -19,6 +19,7 @@ let shotCount = 0;
 const frictionRoll = 0.9894; // atrito rodando
 const frictionSlide = 0.978;  // atrito alto (logo após impacto)
 const restitution = 0.975;
+const wallRestitution = 0.72; // energia perdida ao bater na tabela
 const get_friction = (speed) => speed > 4 ? frictionSlide : frictionRoll;
 
 let aiming = false, aimX, aimY;
@@ -269,10 +270,27 @@ class Ball {
     // spin física
     this.topspin  = 0; // positivo = topspin, negativo = backspin
     this.sidespin = 0; // positivo = direita, negativo = esquerda
+    this.trail = [];
+    this.pocketX = 0;
+    this.pocketY = 0;
+    this.fallAlpha = 1;
   }
 
   draw() {
     if (!this.active) return;
+
+    // trilha de velocidade (rastro)
+    for (let i = 0; i < this.trail.length; i++) {
+      const frac = i / this.trail.length;
+      const t = this.trail[i];
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, this.r * (0.25 + 0.7 * frac), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${(frac * 0.22).toFixed(2)})`;
+      ctx.fill();
+    }
+
+    const _prevAlpha = ctx.globalAlpha;
+    if (this.falling) ctx.globalAlpha = this.fallAlpha;
 
     // sombra elíptica dinâmica
     const shadowScale = 0.38;
@@ -403,15 +421,30 @@ class Ball {
     ctx.arc(this.x - this.r * 0.42, this.y - this.r * 0.42, this.r * 0.1, 0, Math.PI * 2);
     ctx.fillStyle = "rgba(255,255,255,0.9)";
     ctx.fill();
+
+    if (this.falling) ctx.globalAlpha = _prevAlpha;
   }
 
   update() {
     if (!this.active) return;
 
     if (this.falling) {
-      this.r *= 0.92;
+      // puxa a bola para o centro da caçapa enquanto encolhe
+      this.x += (this.pocketX - this.x) * 0.18;
+      this.y += (this.pocketY - this.y) * 0.18;
+      this.fallAlpha *= 0.88;
+      this.r *= 0.90;
       if (this.r < 1) this.active = false;
       return;
+    }
+
+    // registra trilha se em movimento rápido
+    const trailSpd = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (trailSpd > 3) {
+      this.trail.push({ x: this.x, y: this.y });
+      if (this.trail.length > 8) this.trail.shift();
+    } else if (this.trail.length > 0) {
+      this.trail.shift();
     }
 
     this.x += this.vx;
@@ -463,15 +496,17 @@ class Ball {
 
     let margin = rX + 2;
 
-    if (this.x < margin) { this.x = margin; this.vx = Math.abs(this.vx) * restitution; }
-    if (this.x > W - margin) { this.x = W - margin; this.vx = -Math.abs(this.vx) * restitution; }
-    if (this.y < margin) { this.y = margin; this.vy = Math.abs(this.vy) * restitution; }
-    if (this.y > H - margin) { this.y = H - margin; this.vy = -Math.abs(this.vy) * restitution; }
+    if (this.x < margin) { this.x = margin; this.vx = Math.abs(this.vx) * wallRestitution; }
+    if (this.x > W - margin) { this.x = W - margin; this.vx = -Math.abs(this.vx) * wallRestitution; }
+    if (this.y < margin) { this.y = margin; this.vy = Math.abs(this.vy) * wallRestitution; }
+    if (this.y > H - margin) { this.y = H - margin; this.vy = -Math.abs(this.vy) * wallRestitution; }
 
     pockets.forEach(p => {
       let dx = this.x - p[0];
       let dy = this.y - p[1];
     if (!this.pocketed && Math.sqrt(dx * dx + dy * dy) < pocketR) {
+        this.pocketX = p[0];
+        this.pocketY = p[1];
         this.falling = true;
         this.vx = 0;
         this.vy = 0;
@@ -539,6 +574,22 @@ function collide(b1, b2) {
         firstHitBall = other;
       }
     }
+  }
+}
+
+// separa posições sobrepostas sem alterar velocidades (para resolver clusters)
+function separateBalls(b1, b2) {
+  if (!b1.active || !b2.active || b1.falling || b2.falling) return;
+  const dx = b2.x - b1.x;
+  const dy = b2.y - b1.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < b1.r + b2.r && dist > 0) {
+    const overlap = (b1.r + b2.r) - dist;
+    const nx = dx / dist, ny = dy / dist;
+    b1.x -= nx * overlap * 0.5;
+    b1.y -= ny * overlap * 0.5;
+    b2.x += nx * overlap * 0.5;
+    b2.y += ny * overlap * 0.5;
   }
 }
 
@@ -744,9 +795,10 @@ function resolveShot() {
 function drawCue() {
   if (!aiming) return;
 
-  // vetor da branca para o ponto de mira (direção do chute)
-  let ax = aimX - cue.x;
-  let ay = aimY - cue.y;
+  // aimX/aimY é onde o jogador puxou o taco para trás,
+  // então a direção de tiro real é o vetor INVERSO
+  let ax = cue.x - aimX;
+  let ay = cue.y - aimY;
   let distAim = Math.sqrt(ax * ax + ay * ay) || 1;
   let shotDirX = ax / distAim;
   let shotDirY = ay / distAim;
@@ -778,53 +830,84 @@ function drawCue() {
     }
   });
 
-  // ponto final da linha principal
+  // ponto final da linha principal (centro da branca no momento do impacto)
   const maxGuide = 900;
-  let endX, endY;
+  let ghostX, ghostY;
   if (hitBall) {
-    endX = cue.x + shotDirX * hitDist;
-    endY = cue.y + shotDirY * hitDist;
+    ghostX = cue.x + shotDirX * hitDist;
+    ghostY = cue.y + shotDirY * hitDist;
   } else {
-    endX = cue.x + shotDirX * maxGuide;
-    endY = cue.y + shotDirY * maxGuide;
+    ghostX = cue.x + shotDirX * maxGuide;
+    ghostY = cue.y + shotDirY * maxGuide;
   }
 
-  // linha principal (trajetória da branca até a 1ª bola/parede)
-  ctx.strokeStyle = "rgba(255,255,255,0.9)";
-  ctx.lineWidth = 2.4;
+  // halo escuro da linha principal
+  ctx.strokeStyle = "rgba(0,0,0,0.5)";
+  ctx.lineWidth = 4.5;
   ctx.setLineDash([]);
   ctx.beginPath();
   ctx.moveTo(cue.x, cue.y);
-  ctx.lineTo(endX, endY);
+  ctx.lineTo(ghostX, ghostY);
   ctx.stroke();
 
-  // halo suave
-  ctx.strokeStyle = "rgba(0,0,0,0.45)";
-  ctx.lineWidth = 4.2;
+  // linha sólida branca: branca → ghost ball
+  ctx.strokeStyle = "rgba(255,255,255,0.92)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
   ctx.beginPath();
   ctx.moveTo(cue.x, cue.y);
-  ctx.lineTo(endX, endY);
+  ctx.lineTo(ghostX, ghostY);
   ctx.stroke();
 
-  // se atingir uma bola, mostra linha da trajetória da bola alvo
   if (hitBall) {
-    const guideLen = 260;
-    const ballPathX = hitBall.x + shotDirX * guideLen;
-    const ballPathY = hitBall.y + shotDirY * guideLen;
+    // direção da bola alvo após colisão = normal = de ghostBall → hitBall
+    const nDist = Math.sqrt((hitBall.x - ghostX) ** 2 + (hitBall.y - ghostY) ** 2) || 1;
+    const tDirX = (hitBall.x - ghostX) / nDist;
+    const tDirY = (hitBall.y - ghostY) / nDist;
 
-    ctx.strokeStyle = "rgba(255,255,255,0.65)";
+    // direção da branca após colisão = perpendicular à normal (colisão elástica igual massa)
+    // sinal: escolhe a metade que está do lado do vetor original
+    let cDirX = -tDirY, cDirY = tDirX;
+    if (cDirX * shotDirX + cDirY * shotDirY < 0) { cDirX = -cDirX; cDirY = -cDirY; }
+
+    const guideLen = 280;
+    const shortLen = 180;
+
+    // linha da bola alvo (amarela/laranja pontilhada)
+    ctx.strokeStyle = "rgba(255,210,60,0.85)";
     ctx.lineWidth = 2;
-    ctx.setLineDash([10, 7]);
+    ctx.setLineDash([12, 7]);
     ctx.beginPath();
     ctx.moveTo(hitBall.x, hitBall.y);
-    ctx.lineTo(ballPathX, ballPathY);
+    ctx.lineTo(hitBall.x + tDirX * guideLen, hitBall.y + tDirY * guideLen);
     ctx.stroke();
+
+    // linha da branca após colisão (azul claro pontilhada, mais curta)
+    ctx.strokeStyle = "rgba(100,200,255,0.70)";
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.moveTo(ghostX, ghostY);
+    ctx.lineTo(ghostX + cDirX * shortLen, ghostY + cDirY * shortLen);
+    ctx.stroke();
+
     ctx.setLineDash([]);
 
-    // marca o ponto de impacto
+    // ghost ball: círculo translúcido onde a branca bate
     ctx.beginPath();
-    ctx.arc(endX, endY, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.arc(ghostX, ghostY, cue.r, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,255,255,0.75)";
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fill();
+
+    // ponto de contato entre ghost ball e bola alvo
+    const contactX = ghostX + tDirX * cue.r;
+    const contactY = ghostY + tDirY * cue.r;
+    ctx.beginPath();
+    ctx.arc(contactX, contactY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.fill();
   }
 
@@ -836,7 +919,7 @@ function drawCue() {
   // ===== taco mais detalhado =====
   ctx.save();
   ctx.translate(cue.x, cue.y);
-  ctx.rotate(angle + Math.PI); // taco fica atrás da branca, apontando pro alvo
+  ctx.rotate(angle); // angle aponta para frente; taco desenhado em x negativo = atrás da branca
 
   const cueLength = 200;
   const gapFromBall = cue.r + 6;
@@ -1068,6 +1151,14 @@ function loop() {
   for (let i = 0; i < balls.length; i++) {
     for (let j = i + 1; j < balls.length; j++) {
       collide(balls[i], balls[j]);
+    }
+  }
+  // passagens extras para resolver bolas presas em cluster
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < balls.length; i++) {
+      for (let j = i + 1; j < balls.length; j++) {
+        separateBalls(balls[i], balls[j]);
+      }
     }
   }
   balls.forEach(b => b.draw());
