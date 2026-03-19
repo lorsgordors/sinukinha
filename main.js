@@ -1155,9 +1155,9 @@ function resolveShot() {
 function drawCue() {
   if (!aiming) return;
 
-  // direção real do tiro: da branca para o ponto de mira
-  let ax = aimX - cue.x;
-  let ay = aimY - cue.y;
+  // o jogador mira puxando atrás da branca, então a direção real é o vetor inverso
+  let ax = cue.x - aimX;
+  let ay = cue.y - aimY;
   let distAim = Math.sqrt(ax * ax + ay * ay) || 1;
   let shotDirX = ax / distAim;
   let shotDirY = ay / distAim;
@@ -1439,11 +1439,15 @@ function updatePowerUI() {
   if (!powerTrack || !powerFill || !powerKnob || !powerStick) return;
   const percent = Math.max(0, Math.min(1, power));
   const trackHeight = powerTrack.clientHeight;
-  const knobBottom = 14 + percent * (trackHeight - 44);
+  const knobBase = Math.max(8, trackHeight * 0.03);
+  const knobTravel = Math.max(24, trackHeight - knobBase - 24);
+  const stickBase = Math.max(10, trackHeight * 0.04);
+  const stickTravel = Math.max(18, trackHeight * 0.08);
+  const knobBottom = knobBase + percent * knobTravel;
 
   powerFill.style.height = `${percent * 100}%`;
   powerKnob.style.bottom = `${knobBottom}px`;
-  powerStick.style.bottom = `${18 + percent * 34}px`;
+  powerStick.style.bottom = `${stickBase + percent * stickTravel}px`;
 }
 
 function setPowerFromClientY(clientY) {
@@ -1457,8 +1461,8 @@ function setPowerFromClientY(clientY) {
 function shootCurrentAim() {
   if (ballsAreMoving() || gameOver || power < 0.03) return;
 
-  const dx = aimX - cue.x;
-  const dy = aimY - cue.y;
+  const dx = cue.x - aimX;
+  const dy = cue.y - aimY;
   const dist = Math.sqrt(dx * dx + dy * dy);
   if (dist < 0.5) return;
 
@@ -1695,7 +1699,7 @@ function loop() {
 }
 setupBalls();
 updateSpinUI();
-rawAimX = cue.x + 220;
+rawAimX = cue.x - 220;
 rawAimY = cue.y;
 aimX = rawAimX;
 aimY = rawAimY;
@@ -1709,7 +1713,7 @@ if (resetBtn) {
     setupBalls();
     power = 0;
     updatePowerUI();
-    rawAimX = cue.x + 220;
+    rawAimX = cue.x - 220;
     rawAimY = cue.y;
     aimX = rawAimX;
     aimY = rawAimY;

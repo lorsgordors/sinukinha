@@ -247,10 +247,24 @@ canvas {
 }
 
 @media (max-width: 900px) {
+  body {
+    padding: 6px;
+    box-sizing: border-box;
+    align-items: flex-start;
+  }
+
+  .game-stage {
+    align-items: flex-start;
+    padding-top: 4px;
+  }
+
   .table-shell {
-    width: calc(100vw - 10px);
-    gap: 10px;
+    width: 100%;
+    max-width: 100%;
+    flex-direction: column;
+    gap: 8px;
     justify-content: center;
+    align-items: center;
   }
 
   .table-controls {
@@ -265,15 +279,19 @@ canvas {
   }
 
   canvas {
-    width: min(78vw, 1200px);
+    width: min(96vw, 1200px);
     height: auto;
-    max-height: 72svh;
+    max-height: 58svh;
+    border-radius: 14px;
   }
 
   .power-control {
-    width: 64px;
-    padding: 10px 8px;
+    width: min(96vw, 420px);
+    padding: 8px 10px 10px;
     border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   .power-title,
@@ -282,23 +300,34 @@ canvas {
   }
 
   .power-track {
-    width: 36px;
-    height: min(62svh, 340px);
+    width: 32px;
+    height: min(22svh, 150px);
   }
 
   .power-stick {
     width: 12px;
-    height: 240px;
+    height: 92px;
   }
 
   .power-stick::after {
     width: 18px;
-    height: 54px;
+    height: 28px;
+    bottom: 10px;
+  }
+
+  .power-stick::before {
+    top: -8px;
+    width: 8px;
+    height: 14px;
   }
 
   .power-knob {
     width: 24px;
     height: 24px;
+  }
+
+  .power-fill {
+    opacity: 0.75;
   }
 
   .spin-panel {
