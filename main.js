@@ -152,6 +152,37 @@ function getPocketCaptureData(px, py) {
   };
 }
 
+function getPocketJawData(px, py) {
+  const isSidePocket = Math.abs(px - W / 2) < 1;
+
+  if (isSidePocket) {
+    const isTop = py < H / 2;
+    const sy = isTop ? -1 : 1;
+    return {
+      type: "side",
+      jawRadius: 6,
+      points: [
+        { x: px - 22, y: py + sy * 4 },
+        { x: px + 22, y: py + sy * 4 }
+      ]
+    };
+  }
+
+  const sx = px < W / 2 ? 1 : -1;
+  const sy = py < H / 2 ? 1 : -1;
+  const mouthX = px + sx * 34;
+  const mouthY = py + sy * 34;
+
+  return {
+    type: "corner",
+    jawRadius: 5,
+    points: [
+      { x: mouthX + sx * 11, y: mouthY - sy * 12 },
+      { x: mouthX - sx * 12, y: mouthY + sy * 11 }
+    ]
+  };
+}
+
 function getPocketGuideData(px, py) {
   const isSidePocket = Math.abs(px - W / 2) < 1;
 
@@ -469,7 +500,10 @@ class Ball {
     this.pocketY = 0;
     this.pocketMouthX = 0;
     this.pocketMouthY = 0;
+    this.pocketLipX = 0;
+    this.pocketLipY = 0;
     this.pocketStage = 0;
+    this.pocketHangFrames = 0;
     this.fallAlpha = 1;
   }
 
@@ -626,16 +660,29 @@ class Ball {
     if (!this.active) return;
 
     if (this.falling) {
-      // estagio 1: passa pela canaleta/boca da caçapa
+      // estagio 0: rola ate o lip da caçapa
       if (this.pocketStage === 0) {
-        this.x += (this.pocketMouthX - this.x) * 0.24;
-        this.y += (this.pocketMouthY - this.y) * 0.24;
-        this.r *= 0.985;
+        this.x += (this.pocketLipX - this.x) * 0.24;
+        this.y += (this.pocketLipY - this.y) * 0.24;
+        this.r *= 0.992;
 
-        const dx = this.pocketMouthX - this.x;
-        const dy = this.pocketMouthY - this.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 1.5) {
+        const dx = this.pocketLipX - this.x;
+        const dy = this.pocketLipY - this.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 1.25) {
           this.pocketStage = 1;
+        }
+      } else if (this.pocketStage === 1) {
+        // estagio 1: hang on the lip
+        this.pocketHangFrames--;
+        this.x += (this.pocketLipX - this.x) * 0.18;
+        this.y += (this.pocketLipY - this.y) * 0.18;
+        this.x += Math.sin(this.pocketHangFrames * 0.7) * 0.12;
+        this.y += Math.cos(this.pocketHangFrames * 0.45) * 0.08;
+        this.fallAlpha *= 0.995;
+        this.r *= 0.996;
+
+        if (this.pocketHangFrames <= 0) {
+          this.pocketStage = 2;
         }
       } else {
         // estagio 2: desce no fundo do buraco
@@ -728,23 +775,32 @@ class Ball {
 
     for (const p of pockets) {
       const mouthState = getPocketMouthState(this.x, this.y, p[0], p[1], this.r);
+      const jawData = getPocketJawData(p[0], p[1]);
+      const speedNow = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
 
-      if (!this.pocketed && isInsideRealPocket(this.x, this.y, p[0], p[1], this.r)) {
-        const capture = getPocketCaptureData(p[0], p[1]);
-        this.pocketX = capture.sinkX;
-        this.pocketY = capture.sinkY;
-        this.pocketMouthX = capture.mouthX;
-        this.pocketMouthY = capture.mouthY;
-        this.pocketStage = 0;
-        this.falling = true;
-        this.vx = 0;
-        this.vy = 0;
-        this.pocketed = true;
-        if (shotInProgress) {
-          shotPocketedBalls.push(this);
+      // jaws reais: pontos duros que podem cuspir a bola se ela entrar mal
+      for (const jaw of jawData.points) {
+        const dx = this.x - jaw.x;
+        const dy = this.y - jaw.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.0001;
+        const minDist = this.r + jawData.jawRadius;
+
+        if (dist < minDist) {
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const overlap = minDist - dist;
+          this.x += nx * overlap;
+          this.y += ny * overlap;
+
+          const dot = this.vx * nx + this.vy * ny;
+          if (dot < 0) {
+            const jawBounce = jawData.type === "corner" ? 0.82 : 0.65;
+            this.vx -= (1 + jawBounce) * dot * nx;
+            this.vy -= (1 + jawBounce) * dot * ny;
+          }
+          this.vx *= 0.93;
+          this.vy *= 0.93;
         }
-        playPocketSound();
-        break;
       }
 
       if (!this.pocketed && mouthState.inside) {
@@ -753,7 +809,7 @@ class Ball {
         const perpY = guide.dirX;
         let alongV = this.vx * guide.dirX + this.vy * guide.dirY;
         let acrossV = this.vx * perpX + this.vy * perpY;
-        const wall = guide.halfWidth - this.r * 0.15;
+        const wall = guide.halfWidth - this.r * 0.12;
 
         if (Math.abs(across) > wall) {
           const correctedAcross = Math.sign(across) * wall;
@@ -761,16 +817,45 @@ class Ball {
           this.x += perpX * correction;
           this.y += perpY * correction;
           if (acrossV * across > 0) {
-            acrossV *= -0.38;
+            const mouthBounce = jawData.type === "corner" ? -0.52 : -0.34;
+            acrossV *= mouthBounce;
           }
         } else {
-          acrossV *= 0.9;
+          acrossV *= 0.92;
         }
 
-        if (along > guide.startAlong + 2) {
-          alongV = Math.max(alongV, 0.15);
+        if (along > guide.startAlong + 1) {
+          alongV = Math.max(alongV, 0.08);
         }
-        alongV *= 0.99;
+
+        // quinas aceitam menos velocidade; laterais aceitam mais reto
+        const acceptanceSpeed = jawData.type === "corner" ? 5.3 : 6.4;
+        if (isInsideRealPocket(this.x, this.y, p[0], p[1], this.r)) {
+          if (speedNow > acceptanceSpeed) {
+            // muito rápida: roda na borda e pode escapar
+            alongV *= -0.28;
+            acrossV *= 0.72;
+          } else {
+            const capture = getPocketCaptureData(p[0], p[1]);
+            this.pocketX = capture.sinkX;
+            this.pocketY = capture.sinkY;
+            this.pocketMouthX = capture.mouthX;
+            this.pocketMouthY = capture.mouthY;
+            this.pocketLipX = (capture.mouthX + capture.sinkX) / 2;
+            this.pocketLipY = (capture.mouthY + capture.sinkY) / 2;
+            this.pocketStage = 0;
+            this.pocketHangFrames = Math.max(8, Math.round(18 - speedNow * 1.4));
+            this.falling = true;
+            this.vx = 0;
+            this.vy = 0;
+            this.pocketed = true;
+            if (shotInProgress) {
+              shotPocketedBalls.push(this);
+            }
+            playPocketSound();
+            break;
+          }
+        }
 
         this.vx = guide.dirX * alongV + perpX * acrossV;
         this.vy = guide.dirY * alongV + perpY * acrossV;
